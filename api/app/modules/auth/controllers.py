@@ -1,29 +1,36 @@
-from flask import request, jsonify
-from ..auth.services import authenticate_user, create_user
-from ..auth.entities import User
+"""Endpoints HTTP del módulo de autenticación."""
 
-def login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    user = authenticate_user(username, password)
-    if user:
-        return jsonify({'message': 'Login successful', 'user_id': user.id}), 200
-    else:
-        return jsonify({'error': 'Invalid credentials'}), 401
+from __future__ import annotations
 
-def register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    email = data.get('email')
-    
-    # Check if user already exists
-    existing_user = User.query.filter_by(username=username).first()
-    if existing_user:
-        return jsonify({'error': 'Username already exists'}), 400
-    
-    # Create new user
-    new_user = create_user(username, password, email)
-    return jsonify({'message': 'User created successfully', 'user_id': new_user.id}), 201
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.security import get_current_user
+
+from . import services
+from .entities import User
+from .schemas import LoginRequest, RefreshRequest, TokenResponse, UserCreate, UserRead
+
+router = APIRouter()
+
+
+@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register(payload: UserCreate, db: Session = Depends(get_db)) -> User:
+    return services.register_user(db, payload)
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    user = services.authenticate_user(db, str(payload.email), payload.password)
+    return services.build_tokens(user)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    return services.refresh_tokens(db, payload.refresh_token)
+
+
+@router.get("/me", response_model=UserRead)
+def me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user

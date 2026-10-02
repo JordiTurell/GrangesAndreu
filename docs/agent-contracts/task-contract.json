@@ -1,0 +1,20 @@
+{
+  "task_id": "T1",
+  "title": "Task title",
+  "project_area": "api|web|both",
+  "goal": "What needs to be done",
+  "files": ["api/...","web/..."],
+  "dependencies": [],
+  "definition_of_done": [
+    "Requirement satisfied",
+    "No regression",
+    "Validation passed"
+  ],
+  "validation": [
+    "Unit tests",
+    "API checks",
+    "Frontend build",
+    "Manual validation"
+  ],
+  "status": "pending"
+}
