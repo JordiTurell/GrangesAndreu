@@ -1,18 +1,106 @@
 # AGENTS
 
-## Role
-Project Manager
+Reglas y contexto comunes a todos los agentes de GrangesAndreu. El rol de cada agente está en `.github/agents/*.agent.md`; aquí no se asigna ningún rol.
 
-## Responsibilities
-- Define scope, priorities, milestones and delivery plan.
-- Break the work into actionable tasks and dependencies.
-- Identify technical, operational and delivery risks.
-- Track progress and recommend next steps.
-- Keep the project aligned with real repository needs.
+## Idioma y reglas comunes
+- Español por defecto (código, identificadores y commits según el estilo existente), salvo que el usuario pida otro idioma.
+- Leer `README.md` y el código real antes de actuar; basar las decisiones en el repo, no en suposiciones.
+- Control de versiones: solo el PM hace commit y push, y únicamente tras un veredicto `APROBADO` de QA (ver "Automatización y política Git"). Los demás agentes no usan git de escritura. No tocar `.env`, secretos ni `api/data/`.
+- Acciones destructivas (borrar datos, reset de BD, reescribir historial, `push --force`) solo con confirmación del usuario. Única excepción autorizada: el rollback acotado de una tarea rechazada (ver abajo).
+- No inventar requisitos: preguntar o registrar el supuesto.
 
-## Rules
-- Read the repository documentation and code structure before planning.
-- Base decisions on the actual repo and business context.
-- Prefer concrete, actionable plans over generic advice.
-- Use Spanish by default unless the user asks otherwise.
-- Ensure each proposal includes objective, scope, tasks, risks and next steps.
+## Circuito de trabajo
+
+```
+PM ⇄ Arquitecto   diseño y contrato
+PM ⇄ Developer    implementación
+PM ⇄ QA           verificación
+```
+
+En el circuito automático los agentes no se pasan el trabajo entre sí: cada uno responde al PM, que decide el siguiente paso (otra tarea, rollback o commit). Diagramas en `flujo-agents.md`.
+
+| Fase | Agente | Entrada | Salida |
+|------|--------|---------|--------|
+| Planificar | PM | Petición del usuario | `tasks/<slug>.json` y `tasks/<slug>.md` |
+| Diseñar | Arquitecto | Tarea `ARQ-*` | `contracts/<slug>.md` y `contracts/adr/ADR-NNN-*.md` |
+| Implementar | Developer | Tarea `API-*`, `WEB-*` u `OPS-*` + contrato aprobado | Código, tests unitarios y `reports/<slug>/entrega-<ID>.md` |
+| Verificar | QA | Entrega del Developer | `reports/<slug>/qa-<ID>.md` y defectos `BUG-NNN` |
+| Cerrar | PM | Veredicto `APROBADO` | Commit y push de la tarea con su ID |
+
+`<slug>` es siempre `epic.slug` definido por el PM; el resto de agentes lo reutilizan.
+
+### Propiedad de artefactos
+- **`tasks/*.json`**: solo lo edita el PM. Los demás agentes informan en sus documentos y el PM refleja el estado.
+- **Contratos**: los escribe el Arquitecto. Pasa a `aprobado` cuando cumple su checklist y el PM (o el usuario) lo confirma; una tarea `ARQ` solo es `done` con el contrato `aprobado`.
+- **Tests**: el Developer escribe los unitarios de lo que implementa; QA escribe integración, contrato, e2e y regresión. Instalar herramientas de test o lint es una tarea `OPS-*` creada por el PM y ejecutada por el Developer.
+- **Defectos**: QA los reporta en su informe. En el circuito automático el PM hace el rollback y los reenvía al Developer; en modo manual van directos al Developer con copia al PM. Si el contrato es incorrecto van al Arquitecto; si falta un requisito, al PM.
+
+### Estados de tarea
+`todo` → `in_progress` → `in_qa` → `done`. Si QA rechaza: rollback del código, `rejected` → `in_progress`. Cualquier estado puede pasar a `blocked` indicando el motivo.
+
+## Automatización y política Git
+
+### Circuito automático
+Cuando el usuario pide construir o cambiar algo, el PM ejecuta el circuito completo invocando a Arquitecto, Developer y QA como subagentes y solo se detiene en las "Paradas". Si el usuario pide solo planificar, el PM se detiene tras el plan. El detalle del bucle está en `.github/agents/pm.agent.md`.
+
+### Resultado de cada agente
+Cada agente termina su respuesta con este bloque, que el PM lee para decidir el siguiente paso:
+
+```
+## Resultado
+agente: Arquitecto | Developer | QA
+tarea: <ID>
+estado: ok | bloqueado | pregunta
+veredicto: APROBADO | RECHAZADO          # solo QA
+artefactos: <rutas>
+bugs: <BUG-001 (S2), ...>                # solo QA
+adr_pendientes: <ADR-xxx>                # solo Arquitecto
+preguntas: <decisiones de negocio o datos que faltan>   # solo si estado = pregunta
+detalle: <1-3 líneas>
+```
+
+### Política Git (solo el PM)
+- **Rama y push**: la rama actual (hoy `main`), con `git push origin HEAD`. Nunca `--force`, `--no-verify`, `--amend`, `rebase` ni `reset --hard`.
+- **Precondición**: `git status --porcelain -- api web` vacío antes de cada tarea. Si no, parar y avisar: no se toca trabajo ajeno.
+- **Un commit por tarea aprobada**: asunto `<ID>: <título de la tarea>` y cuerpo con épica, historia, veredicto de QA y rutas del contrato y del informe. Solo se añaden `api`, `web`, `tasks`, `contracts`, `reports` y los `files` de la tarea; nunca `.env`, `*.db`, `data/`, `node_modules/`, `dist/` ni `.angular/`.
+- **Solo se hace commit** con QA `APROBADO` y las puertas del PM en verde. Nada sin aprobar entra en el historial. Única excepción: la documentación de una tarea `ARQ` (plan, contrato, ADR) se commitea al aprobarse el contrato.
+- **Rollback de una tarea rechazada** (código sin commit): `git restore --source=HEAD --staged --worktree -- api web <otros files de la tarea>` y `git clean -fd -- api web <otros files de la tarea>`. Nunca `-x` ni fuera de esas rutas. `tasks/`, `contracts/` y `reports/` no se tocan: el informe de QA es la entrada del reintento.
+- **Fallo detectado tras el commit** (p. ej. integración): `git revert --no-edit <sha>` del commit culpable (se localiza con `git log --grep "^<ID>:"`) y push. Nunca se reescribe historial publicado.
+- **Reintentos**: 2 tras un `RECHAZADO` (3 intentos en total). Agotados: tarea `blocked`, repo en el último commit bueno y aviso al usuario.
+
+### Paradas (el PM avisa o pregunta y se detiene)
+- Un agente devuelve `estado: pregunta`, o el contrato deja decisiones de negocio o ADR pendientes.
+- `api/` o `web/` con cambios ajenos antes de empezar una tarea.
+- Reintentos agotados, puerta del PM en rojo sin causa clara o fichero prohibido en el diff.
+- `git push` rechazado (rama protegida, no fast-forward, credenciales): no se fuerza ni se resuelven conflictos de forma automática.
+
+## Repo (estado verificado el 2026-11-10; revisar el código si ha pasado tiempo)
+
+### Estructura y stack
+- **API** (`api/`): FastAPI, SQLAlchemy 2, Pydantic 2, PyJWT y bcrypt. SQLite en `api/data/app.db` (ignorado por git) o `DATABASE_URL`. Prefijo `/api`; `/docs`, `/openapi.json` y `/health`.
+- Módulos de la API en `api/app/modules/<modulo>/` con `entities.py`, `schemas.py`, `services.py`, `controllers.py` y `routes.py`; transversales en `api/app/core/` y `api/app/shared/`.
+- **Web** (`web/`): Angular 22 con SSR e hidratación, Tailwind 4, Vitest y Prettier (`printWidth` 100, comillas simples; `.editorconfig` de 2 espacios). Módulos en `web/src/app/modules/<modulo>/<pantalla>/<pantalla>.component.{ts,html,css}`.
+- TypeScript sin `strict`, pero con `noImplicitReturns`, `noImplicitOverride` y `noPropertyAccessFromIndexSignature`.
+
+### Cómo ejecutar
+- API: `cd api` y `python main.py` (`127.0.0.1:8000`; `bootstrap.py` instala con pip lo que falte de `requirements.txt`). Configuración en `api/.env` a partir de `api/.env.example`; `SECRET_KEY` obligatoria salvo `DEBUG=true`.
+- Web (en `web/`): `npm start` (puerto 4200), `npm run build`, `npm test -- --no-watch`, `npm run serve:ssr:web` (tras `build`).
+- CORS: `CORS_ORIGINS`, por defecto `http://localhost:4200`.
+- Sin `api/.env`, arrancar la API con variables de entorno de la sesión (`DEBUG=true` y, en pruebas, `DATABASE_URL` a una BD temporal); no crear ni editar `.env`.
+
+### Requisitos del entorno (verificado el 2026-11-10 en esta máquina)
+- Python 3.13 con las dependencias de `requirements.txt` instaladas (`pytest` y `httpx` no lo están).
+- Angular 22.2 exige Node `^22.22.3 || ^24.15.0 || >=26` (`@angular/build`). La terminal arranca con Node 20.11.1 y NVM Portable solo cambia la versión de la terminal actual: antes de cualquier comando `npm`, ejecutar `nvm use 26.0.0` en esa terminal. Verificado con Node 26.0.0: `npm ci`, `npm run build` y `npm test -- --no-watch` pasan.
+- Git con identidad configurada y credenciales vía `credential.helper=manager`.
+
+### Estado actual y huecos conocidos
+- `auth` implementado (`POST /api/auth/register|login|refresh`, `GET /api/auth/me`); su contrato está en `contracts/auth.md`.
+- `pollos` está vacío y sin registrar en `api/main.py`. No hay más módulos de dominio.
+- Sin migraciones: `create_all` no altera tablas existentes y no hay Alembic.
+- Sin tests ni `pytest` en la API; un único test en la Web (`app.spec.ts`, que espera el título placeholder `Hello, web`). Sin linter en ninguna capa.
+- El Front no tiene `provideHttpClient`, interceptors, servicios, modelos ni URL base de la API; `app.routes.ts` está vacío; el login simula la llamada y navega a `/dashboard`, que no existe.
+- `app.routes.server.ts` prerenderiza todas las rutas (`**`).
+- Los errores de dominio usan `{"error": {"code", "message"}}`, pero los 422 de validación usan el formato por defecto de FastAPI (`detail`).
+- Los refresh tokens son *stateless*: no se rotan ni se revocan.
+- El límite de contraseña (`max_length=72`) cuenta caracteres, mientras que bcrypt limita bytes.
+

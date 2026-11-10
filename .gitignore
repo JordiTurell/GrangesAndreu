@@ -1,2 +1,5 @@
 .ai/
 web/node_modules
+web/dist/
+web/.angular/
+.pytest_cache/
