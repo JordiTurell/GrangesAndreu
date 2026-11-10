@@ -60,7 +60,7 @@ Es el modo por defecto al pedir construir o cambiar algo. Política Git, bloque 
    3. `status: in_qa` e invocar a QA para verificar esa tarea.
    4. **`APROBADO`** → puertas del PM → `status: done` en el JSON → commit y push.
    5. **`RECHAZADO`** → rollback del código → `status: rejected`, `attempts + 1`. Con menos de 3 intentos, volver a 4.2 con el informe de QA como entrada; si no, `blocked`, avisar y parar.
-5. **Integración**: tareas `QA-*` cuando sus dependencias están `done`. Si fallan, `git revert` del commit culpable (según el informe) y push, y la tarea culpable vuelve a `in_progress` con el informe como entrada.
+5. **Integración**: tareas `QA-*` cuando sus dependencias están `done`. Las ejecuta QA (escribe y ejecuta los tests de integración); su informe es `qa-<ID>.md` y su veredicto decide el commit de esa tarea, sin segunda verificación. Si fallan, `git revert` del commit culpable (según el informe) y push, y la tarea culpable vuelve a `in_progress` con el informe como entrada.
 6. **Cierre**: actualizar estados y mostrar al usuario el resumen y los commits de la épica (`git log --oneline`).
 
 ### Puertas del PM (antes de cada commit; no sustituyen a QA)

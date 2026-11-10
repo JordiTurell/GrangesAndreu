@@ -87,6 +87,7 @@ detalle: <1-3 líneas>
 - Web (en `web/`): `npm start` (puerto 4200), `npm run build`, `npm test -- --no-watch`, `npm run serve:ssr:web` (tras `build`).
 - CORS: `CORS_ORIGINS`, por defecto `http://localhost:4200`.
 - Sin `api/.env`, arrancar la API con variables de entorno de la sesión (`DEBUG=true` y, en pruebas, `DATABASE_URL` a una BD temporal); no crear ni editar `.env`.
+- `settings` y `engine` se crean al importar `main` y el lifespan llama a `init_db()` sobre el engine global: en pruebas hay que fijar `DEBUG` y `DATABASE_URL` en el entorno **antes** de importar; sobrescribir `get_db` no basta. Importar `main` también ejecuta `bootstrap.ensure_dependencies()` (pip, necesita red): instalar antes `requirements.txt`.
 
 ### Requisitos del entorno (verificado el 2026-11-10 en esta máquina)
 - Python 3.13 con las dependencias de `requirements.txt` instaladas (`pytest` y `httpx` no lo están).
