@@ -1,0 +1,409 @@
+{
+  "epic": {
+    "id": "EP-02",
+    "slug": "auth-completo",
+    "title": "Autenticación completa: login, registro, recuperación de contraseña y roles admin/user",
+    "goal": "Que la app tenga login y registro reales (Web contra la API), recuperación de contraseña (forgot/reset) con enlace en modo desarrollo y dos roles globales, admin y user."
+  },
+  "scope": "both",
+  "mode": "auto",
+  "assumptions": [
+    "EP-01 (base-tests-password) se cierra antes de empezar EP-02 (decisión del usuario): EP-02 reutiliza api/tests/ y toca los mismos ficheros (schemas.py, security.py, config.py, requirements.txt).",
+    "Recuperación de contraseña en modo desarrollo: no se envía correo; el enlace de reseteo se escribe en el log de la API. Debe quedar desactivado fuera de modo debug (el Arquitecto decide el mecanismo). SMTP real queda en backlog.",
+    "El token de reseteo caduca a los 30 minutos (decisión del usuario) y es de un solo uso.",
+    "Sin verificación de email: el registro es directo (decisión del usuario).",
+    "Hay dos roles globales: admin y user. Todo usuario registrado tiene siempre un rol. Confirmado por el usuario (2026-11-11): el registro público siempre crea rol user y el payload de registro no admite elegir rol (evita escalada de privilegios).",
+    "El primer admin se crea con variables de entorno al arrancar la API (decisión del usuario, 2026-11-11); el Arquitecto define nombres, validación y comportamiento en ARQ-003 sin tocar api/.env.",
+    "ADR-007 (roles y permisos) se reduce a estos dos roles globales; el ámbito por granja y roles de granja quedan fuera.",
+    "Añadir el rol a la tabla users exige una estrategia de cambio de esquema (no hay migraciones, ADR-005 pendiente y api/data/app.db ya tiene la tabla): la decide el Arquitecto en ARQ-003 (confirmado por el usuario); borrar o recrear la BD solo con confirmación del usuario.",
+    "Una tarea WEB depende del contrato, no de la implementación de la API, salvo que necesite datos reales.",
+    "web/angular.json lleva un cambio ajeno (analytics del CLI de Angular, no pertenece a ninguna tarea): el usuario lo gestiona él mismo (lo commitea o lo revierte) y avisa al PM antes de reanudar EP-01 (parada del PM)."
+  ],
+  "out_of_scope": [
+    "Envío real de correo (SMTP o proveedor): backlog; en esta épica solo modo desarrollo con log",
+    "Verificación de email",
+    "Cambio de contraseña con sesión iniciada, 2FA y bloqueo de cuentas",
+    "Rate limiting de login y forgot-password: el Arquitecto registra la decisión; la implementación queda en backlog salvo que lo marque como requisito",
+    "Gestión de usuarios por el admin (alta, cambio de rol, baja) salvo que el Arquitecto la necesite para crear el primer admin",
+    "Roles por granja y resto de módulos de dominio (pollos, horarios, chat)",
+    "Pantalla dashboard y pantallas específicas de admin"
+  ],
+  "artifacts": {
+    "contract": "contracts/auth-completo.md",
+    "reports": "reports/auth-completo/"
+  },
+  "stories": [
+    {
+      "id": "US-01",
+      "as_a": "visitante",
+      "i_want": "registrarme desde la Web",
+      "so_that": "tener una cuenta con la que acceder a la app",
+      "acceptance_criteria": [
+        "Existe la pantalla de registro y el enlace del login apunta a ella",
+        "El registro crea la cuenta con rol user y no permite elegir el rol",
+        "Los errores de la API (409 de duplicados y 422 de validación) se muestran claros en el formulario",
+        "Tras registrarse el usuario queda en un estado coherente con el contrato (login o sesión iniciada)"
+      ]
+    },
+    {
+      "id": "US-02",
+      "as_a": "usuario registrado",
+      "i_want": "iniciar sesión desde la Web contra la API real",
+      "so_that": "acceder a las pantallas privadas con mi cuenta",
+      "acceptance_criteria": [
+        "El login llama a POST /api/auth/login y gestiona tokens según ADR-002",
+        "Credenciales inválidas muestran el mensaje de la API sin simulaciones",
+        "Existen guard de rutas privadas y refresco de sesión según el contrato",
+        "La sesión conoce el rol del usuario (admin o user)"
+      ]
+    },
+    {
+      "id": "US-03",
+      "as_a": "usuario que olvidó su contraseña",
+      "i_want": "solicitar un enlace de recuperación y fijar una contraseña nueva",
+      "so_that": "recuperar el acceso a mi cuenta",
+      "acceptance_criteria": [
+        "El enlace '¿Olvidaste tu contraseña?' lleva a una pantalla que solicita el email",
+        "La API responde igual exista o no el email (sin enumeración de cuentas) y en modo desarrollo escribe el enlace en el log",
+        "El token caduca a los 30 minutos y solo se puede usar una vez",
+        "La pantalla de reseteo valida la nueva contraseña con las mismas reglas que el registro (incluido el límite de 72 bytes, ADR-004)",
+        "Tras el reseteo se puede iniciar sesión con la contraseña nueva y no con la antigua"
+      ]
+    },
+    {
+      "id": "US-04",
+      "as_a": "responsable de la app",
+      "i_want": "que cada usuario tenga rol admin o user",
+      "so_that": "poder restringir funciones al rol admin en el futuro",
+      "acceptance_criteria": [
+        "Todo usuario tiene un rol; los usuarios existentes quedan con un rol válido tras el cambio de esquema",
+        "El rol se devuelve en GET /api/auth/me y la API dispone de una dependencia para exigir un rol",
+        "Se documenta cómo se crea el primer admin",
+        "Un usuario no puede asignarse el rol admin desde el registro público"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "ARQ-003",
+      "story": "US-03",
+      "layer": "arq",
+      "title": "Contrato API de recuperación de contraseña y roles admin/user",
+      "description": "Decidir y documentar en contracts/auth-completo.md y contracts/auth.md: (a) endpoints, esquemas, errores y modelo de datos del reseteo (token hasheado, un solo uso, 30 minutos, respuesta sin enumeración, qué ocurre con tokens previos y con los refresh tokens ya emitidos, ADR-003); (b) mecanismo del modo desarrollo del enlace (log) y cómo se garantiza que no se active fuera de debug, más la URL base del Front; (c) modelo de roles admin y user: columna en users, valor por defecto, qué devuelve /me, dependencia para exigir rol, cómo se crea el primer admin y por qué el registro no admite elegir rol; (d) estrategia para añadir la columna a users con api/data/app.db existente (ADR-005); (e) decisión sobre rate limiting. Resolver o crear los ADR necesarios (ADR-003, ADR-005, ADR-007 reducido, ADR de recuperación). Registrar como pregunta cualquier decisión de negocio.",
+      "files": [
+        "contracts/auth-completo.md",
+        "contracts/auth.md",
+        "contracts/adr/README.md",
+        "contracts/adr/ADR-005-migraciones.md",
+        "contracts/adr/ADR-007-roles.md",
+        "contracts/adr/ADR-011-recuperacion-password.md"
+      ],
+      "owner": "arquitecto",
+      "depends_on": [],
+      "priority": "P0",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "Espera al cierre de EP-01 (QA-001 de base-tests-password)",
+      "bugs": [],
+      "definition_of_done": [
+        "Contrato en estado aprobado con endpoints, esquemas, errores y criterios verificables para Developer y QA",
+        "ADR-003, ADR-005, ADR-007 y el de recuperación aceptados o con pregunta registrada",
+        "Estrategia para añadir la columna de rol a users sin perder datos ni borrar la BD sin confirmación",
+        "contracts/auth.md coherente con el contrato nuevo",
+        "Bloque Resultado con estado ok y sin decisiones de negocio pendientes"
+      ]
+    },
+    {
+      "id": "ARQ-004",
+      "story": "US-02",
+      "layer": "arq",
+      "title": "Diseño Angular de autenticación: rutas, sesión, guards y pantallas",
+      "description": "Decidir y documentar en el contrato: ADR-001 (formato de errores 422 en el Front), ADR-002 (almacenamiento de tokens compatible con SSR y significado de Recordarme), ADR-006 (RenderMode por ruta: privadas, login, registro y reseteo con token en la URL), rutas y guards, AuthService, interceptor de Authorization y de refresco, modelos TS (incluido el rol), tratamiento de las dos formas de error, destino tras login y tras registro, y pantallas de registro, forgot-password y reset-password (componentes y campos).",
+      "files": [
+        "contracts/auth-completo.md",
+        "contracts/adr/README.md",
+        "contracts/adr/ADR-001-errores-validacion.md",
+        "contracts/adr/ADR-002-tokens-front.md",
+        "contracts/adr/ADR-006-rendermode.md"
+      ],
+      "owner": "arquitecto",
+      "depends_on": ["ARQ-003"],
+      "priority": "P0",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Diseño Angular aprobado con rutas, servicios, interceptor, guards y modelos TS",
+        "ADR-001, ADR-002 y ADR-006 aceptados",
+        "Criterios verificables para Developer y QA",
+        "Bloque Resultado con estado ok y sin decisiones de negocio pendientes"
+      ]
+    },
+    {
+      "id": "OPS-003",
+      "story": "US-04",
+      "layer": "ops",
+      "title": "Estrategia de cambio de esquema para añadir el rol a users",
+      "description": "Implementar la estrategia decidida en ARQ-003 (ADR-005) para añadir la columna de rol a la tabla users existente sin perder datos. Si exige borrar o recrear api/data/app.db, pedir confirmación al usuario (parada). Los ficheros exactos se ajustan al contrato.",
+      "files": [
+        "api/app/core/database.py",
+        "api/requirements.txt"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-003"],
+      "priority": "P0",
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Una BD con la tabla users anterior se actualiza sin perder usuarios",
+        "Una BD nueva se crea con el esquema completo",
+        "No se toca api/.env y api/data/app.db solo se modifica con confirmación del usuario",
+        "Entrega documentada en reports/auth-completo/entrega-OPS-003.md"
+      ]
+    },
+    {
+      "id": "API-002",
+      "story": "US-04",
+      "layer": "api",
+      "title": "Roles admin y user en la API",
+      "description": "Implementar según contrato: campo de rol en la entidad User, rol user por defecto en register sin admitir rol en el payload, rol en UserRead y /me, dependencia para exigir rol y mecanismo del primer admin. Incluye tests unitarios del Developer.",
+      "files": [
+        "api/app/modules/auth/entities.py",
+        "api/app/modules/auth/schemas.py",
+        "api/app/modules/auth/services.py",
+        "api/app/modules/auth/controllers.py",
+        "api/app/core/security.py",
+        "api/app/core/config.py",
+        "api/tests/unit/"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-003", "OPS-003"],
+      "priority": "P0",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "register crea siempre rol user y rechaza o ignora un rol enviado, según contrato",
+        "GET /api/auth/me devuelve el rol",
+        "La dependencia de rol responde 403 a un user en un endpoint exclusivo de admin (probada en tests)",
+        "Tests unitarios en verde con pytest",
+        "Entrega documentada en reports/auth-completo/entrega-API-002.md"
+      ]
+    },
+    {
+      "id": "API-003",
+      "story": "US-03",
+      "layer": "api",
+      "title": "Forgot-password y reset-password en la API (modo desarrollo)",
+      "description": "Implementar según contrato: entidad del token de reseteo registrada en init_db, ajustes de configuración (caducidad 30 minutos, URL base del Front), servicio de enlace en modo desarrollo (log) y los endpoints de solicitud y de reseteo con las reglas de contraseña vigentes (ADR-004). Incluye tests unitarios del Developer.",
+      "files": [
+        "api/app/modules/auth/entities.py",
+        "api/app/modules/auth/schemas.py",
+        "api/app/modules/auth/services.py",
+        "api/app/modules/auth/controllers.py",
+        "api/app/core/config.py",
+        "api/app/core/database.py",
+        "api/app/shared/mail.py",
+        "api/tests/unit/"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-003", "API-002"],
+      "priority": "P0",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "La solicitud responde igual exista o no el email y en modo desarrollo escribe el enlace en el log",
+        "El token expira a los 30 minutos, solo sirve una vez y no se guarda en claro",
+        "El reseteo cambia la contraseña y la nueva se valida igual que en register",
+        "Fuera de modo debug no se escribe el enlace en el log",
+        "Tests unitarios en verde con pytest",
+        "Entrega documentada en reports/auth-completo/entrega-API-003.md"
+      ]
+    },
+    {
+      "id": "WEB-001",
+      "story": "US-02",
+      "layer": "web",
+      "title": "Base de autenticación en Angular y login real",
+      "description": "Implementar el diseño de ARQ-004: provideHttpClient y URL base de la API, modelos TS, AuthService, interceptor, rutas y guards, y conectar el login a la API real con tratamiento de errores. Ficheros exactos a ajustar al contrato.",
+      "files": [
+        "web/src/app/app.config.ts",
+        "web/src/app/app.routes.ts",
+        "web/src/app/app.routes.server.ts",
+        "web/src/app/modules/auth/",
+        "web/src/environments/"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-004"],
+      "priority": "P0",
+      "size": "L",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El login llama a la API real y gestiona tokens según ADR-002",
+        "Guard de rutas privadas y manejo de errores según contrato",
+        "npm run build y npm test -- --no-watch en verde con Node 26.0.0",
+        "Prettier aplicado",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-001.md"
+      ]
+    },
+    {
+      "id": "WEB-002",
+      "story": "US-01",
+      "layer": "web",
+      "title": "Pantalla de registro",
+      "description": "Implementar la pantalla de registro del diseño aprobado (username, email, contraseña), enlazada desde el login, con validación y errores de la API.",
+      "files": [
+        "web/src/app/modules/auth/register/",
+        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/app.routes.ts"
+      ],
+      "owner": "developer",
+      "depends_on": ["WEB-001"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El enlace Regístrate aquí del login lleva a la pantalla",
+        "Muestra los errores 409 y 422 de la API",
+        "npm run build y npm test -- --no-watch en verde",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-002.md"
+      ]
+    },
+    {
+      "id": "WEB-003",
+      "story": "US-03",
+      "layer": "web",
+      "title": "Pantallas de forgot-password y reset-password",
+      "description": "Implementar las pantallas de solicitud de recuperación (email) y de reseteo con el token de la URL, según el diseño aprobado. Se enlaza desde el login.",
+      "files": [
+        "web/src/app/modules/auth/forgot-password/",
+        "web/src/app/modules/auth/reset-password/",
+        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/app.routes.ts"
+      ],
+      "owner": "developer",
+      "depends_on": ["WEB-001"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El enlace Olvidaste tu contraseña del login lleva a la pantalla",
+        "Mensaje de confirmación igual exista o no el email",
+        "Reseteo con token válido, caducado o ya usado muestra el resultado correcto",
+        "npm run build y npm test -- --no-watch en verde",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-003.md"
+      ]
+    },
+    {
+      "id": "QA-002",
+      "story": "US-03",
+      "layer": "qa",
+      "title": "Integración API-Web del flujo completo de autenticación",
+      "description": "Escribir y ejecutar los tests de integración: registro, login, forgot y reset (token válido, caducado, reutilizado), roles (user recibe 403 en endpoint de admin, registro no permite admin), ausencia de hashed_password y del token en respuestas, CORS y SSR de las rutas nuevas.",
+      "files": [
+        "api/tests/integration/test_auth_flow.py",
+        "api/tests/integration/test_roles.py"
+      ],
+      "owner": "qa",
+      "depends_on": ["API-003", "WEB-002", "WEB-003"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Flujo registro, login, forgot, reset y login con la nueva contraseña verificado",
+        "Token caducado (30 minutos) y reutilizado devuelven error",
+        "Un user no puede obtener rol admin ni acceder a lo exclusivo de admin",
+        "pytest completo y npm run build en verde",
+        "Informe en reports/auth-completo/qa-QA-002.md"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "R-01",
+      "description": "Añadir el rol a la tabla users existente: create_all no altera tablas y no hay migraciones (ADR-005); la BD local api/data/app.db ya tiene usuarios.",
+      "probability": "high",
+      "impact": "high",
+      "mitigation": "ARQ-003 decide la estrategia y OPS-003 la implementa antes de API-002; nada de borrar o recrear la BD sin confirmación del usuario."
+    },
+    {
+      "id": "R-02",
+      "description": "Escalada de privilegios: si el registro público admite elegir el rol, cualquiera se hace admin.",
+      "probability": "med",
+      "impact": "high",
+      "mitigation": "El contrato prohíbe aceptar el rol en el payload de registro; QA-002 lo verifica."
+    },
+    {
+      "id": "R-03",
+      "description": "Seguridad del reseteo: token adivinable o reutilizable, enumeración de cuentas por la respuesta o el tiempo, y enlace en log activo fuera de desarrollo.",
+      "probability": "med",
+      "impact": "high",
+      "mitigation": "Contrato con token aleatorio hasheado, un solo uso y respuesta uniforme; el log del enlace solo en modo debug; QA lo verifica."
+    },
+    {
+      "id": "R-04",
+      "description": "Los refresh tokens son stateless (ADR-003): tras resetear la contraseña los tokens emitidos siguen siendo válidos.",
+      "probability": "high",
+      "impact": "med",
+      "mitigation": "ARQ-003 resuelve ADR-003 o documenta la limitación aceptada."
+    },
+    {
+      "id": "R-05",
+      "description": "Sin rate limiting en login y forgot-password: fuerza bruta y abuso del envío.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "ARQ-003 registra la decisión; si se difiere, queda en backlog."
+    },
+    {
+      "id": "R-06",
+      "description": "Conflicto de ficheros con EP-01 (schemas.py, security.py, config.py, requirements.txt) y dependencia de pytest.",
+      "probability": "high",
+      "impact": "med",
+      "mitigation": "EP-02 empieza tras cerrar EP-01 y todo se ejecuta en serie sobre un único árbol de trabajo."
+    },
+    {
+      "id": "R-07",
+      "description": "SSR de Angular: ADR-002 y ADR-006 sin resolver; almacenamiento de tokens sin navegador y prerender de rutas privadas o con token en la URL.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "ARQ-004 los resuelve antes de WEB-001."
+    },
+    {
+      "id": "R-08",
+      "description": "Node 20 por defecto en la terminal: Angular 22 exige Node 22.22 o superior.",
+      "probability": "med",
+      "impact": "low",
+      "mitigation": "nvm use 26.0.0 en la terminal antes de cualquier comando npm (preflight del PM)."
+    },
+    {
+      "id": "R-09",
+      "description": "Cambio ajeno en web/angular.json (analytics del CLI de Angular con un identificador personal) en el árbol de trabajo.",
+      "probability": "high",
+      "impact": "low",
+      "mitigation": "El usuario decide si lo commitea, lo descarta o se ignora; nadie lo descarta con git."
+    }
+  ]
+}

@@ -3,10 +3,10 @@
 Reglas y contexto comunes a todos los agentes de GrangesAndreu. El rol de cada agente está en `.github/agents/*.agent.md`; aquí no se asigna ningún rol.
 
 ## Idioma y reglas comunes
-- Español por defecto (código, identificadores y commits según el estilo existente), salvo que el usuario pida otro idioma.
+- Español por defecto (código, identificadores y mensajes de commit sugeridos según el estilo existente), salvo que el usuario pida otro idioma.
 - Leer `README.md` y el código real antes de actuar; basar las decisiones en el repo, no en suposiciones.
-- Control de versiones: solo el PM hace commit y push, y únicamente tras un veredicto `APROBADO` de QA (ver "Automatización y política Git"). Los demás agentes no usan git de escritura. No tocar `.env`, secretos ni `api/data/`.
-- Acciones destructivas (borrar datos, reset de BD, reescribir historial, `push --force`) solo con confirmación del usuario. Única excepción autorizada: el rollback acotado de una tarea rechazada (ver abajo).
+- Control de versiones: **ningún agente (PM incluido) hace commits ni subidas a git**; los hace el usuario cuando quiera (ver "Política Git"). Los agentes solo usan git de lectura. No tocar `.env`, secretos ni `api/data/`.
+- Acciones destructivas (borrar datos, reset de BD) solo con confirmación del usuario. Nadie descarta cambios del árbol de trabajo: no hay rollback con git.
 - No inventar requisitos: preguntar o registrar el supuesto.
 
 ## Circuito de trabajo
@@ -17,7 +17,7 @@ PM ⇄ Developer    implementación
 PM ⇄ QA           verificación
 ```
 
-En el circuito automático los agentes no se pasan el trabajo entre sí: cada uno responde al PM, que decide el siguiente paso (otra tarea, rollback o commit). Diagramas en `flujo-agents.md`.
+En el circuito automático los agentes no se pasan el trabajo entre sí: cada uno responde al PM, que decide el siguiente paso (otra tarea o reintento). Diagramas en `flujo-agents.md`.
 
 | Fase | Agente | Entrada | Salida |
 |------|--------|---------|--------|
@@ -25,7 +25,7 @@ En el circuito automático los agentes no se pasan el trabajo entre sí: cada un
 | Diseñar | Arquitecto | Tarea `ARQ-*` | `contracts/<slug>.md` y `contracts/adr/ADR-NNN-*.md` |
 | Implementar | Developer | Tarea `API-*`, `WEB-*` u `OPS-*` + contrato aprobado | Código, tests unitarios y `reports/<slug>/entrega-<ID>.md` |
 | Verificar | QA | Entrega del Developer | `reports/<slug>/qa-<ID>.md` y defectos `BUG-NNN` |
-| Cerrar | PM | Veredicto `APROBADO` | Commit y push de la tarea con su ID |
+| Cerrar | PM | Veredicto `APROBADO` | Tarea `done` en `tasks/<slug>.json`, cambios sin commit y mensaje de commit sugerido en el resumen para el usuario |
 
 `<slug>` es siempre `epic.slug` definido por el PM; el resto de agentes lo reutilizan.
 
@@ -33,10 +33,10 @@ En el circuito automático los agentes no se pasan el trabajo entre sí: cada un
 - **`tasks/*.json`**: solo lo edita el PM. Los demás agentes informan en sus documentos y el PM refleja el estado.
 - **Contratos**: los escribe el Arquitecto. Pasa a `aprobado` cuando cumple su checklist y el PM (o el usuario) lo confirma; una tarea `ARQ` solo es `done` con el contrato `aprobado`.
 - **Tests**: el Developer escribe los unitarios de lo que implementa; QA escribe integración, contrato, e2e y regresión. Instalar herramientas de test o lint es una tarea `OPS-*` creada por el PM y ejecutada por el Developer.
-- **Defectos**: QA los reporta en su informe. En el circuito automático el PM hace el rollback y los reenvía al Developer; en modo manual van directos al Developer con copia al PM. Si el contrato es incorrecto van al Arquitecto; si falta un requisito, al PM.
+- **Defectos**: QA los reporta en su informe. En el circuito automático el PM los reenvía al Developer, que corrige sobre el árbol de trabajo (sin rollback); en modo manual van directos al Developer con copia al PM. Si el contrato es incorrecto van al Arquitecto; si falta un requisito, al PM.
 
 ### Estados de tarea
-`todo` → `in_progress` → `in_qa` → `done`. Si QA rechaza: rollback del código, `rejected` → `in_progress`. Cualquier estado puede pasar a `blocked` indicando el motivo.
+`todo` → `in_progress` → `in_qa` → `done`. Si QA rechaza: `rejected` → `in_progress` (el Developer corrige sobre el árbol de trabajo). Cualquier estado puede pasar a `blocked` indicando el motivo.
 
 ## Automatización y política Git
 
@@ -59,20 +59,19 @@ preguntas: <decisiones de negocio o datos que faltan>   # solo si estado = pregu
 detalle: <1-3 líneas>
 ```
 
-### Política Git (solo el PM)
-- **Rama y push**: la rama actual (hoy `main`), con `git push origin HEAD`. Nunca `--force`, `--no-verify`, `--amend`, `rebase` ni `reset --hard`.
-- **Precondición**: `git status --porcelain -- api web` vacío antes de cada tarea. Si no, parar y avisar: no se toca trabajo ajeno.
-- **Un commit por tarea aprobada**: asunto `<ID>: <título de la tarea>` y cuerpo con épica, historia, veredicto de QA y rutas del contrato y del informe. Solo se añaden `api`, `web`, `tasks`, `contracts`, `reports` y los `files` de la tarea; nunca `.env`, `*.db`, `data/`, `node_modules/`, `dist/` ni `.angular/`.
-- **Solo se hace commit** con QA `APROBADO` y las puertas del PM en verde. Nada sin aprobar entra en el historial. Única excepción: la documentación de una tarea `ARQ` (plan, contrato, ADR) se commitea al aprobarse el contrato.
-- **Rollback de una tarea rechazada** (código sin commit): `git restore --source=HEAD --staged --worktree -- api web <otros files de la tarea>` y `git clean -fd -- api web <otros files de la tarea>`. Nunca `-x` ni fuera de esas rutas. `tasks/`, `contracts/` y `reports/` no se tocan: el informe de QA es la entrada del reintento.
-- **Fallo detectado tras el commit** (p. ej. integración): `git revert --no-edit <sha>` del commit culpable (se localiza con `git log --grep "^<ID>:"`) y push. Nunca se reescribe historial publicado.
-- **Reintentos**: 2 tras un `RECHAZADO` (3 intentos en total). Agotados: tarea `blocked`, repo en el último commit bueno y aviso al usuario.
+### Política Git (solo lectura para todos los agentes)
+- **Sin commits ni subidas**: ningún agente ejecuta `git add`, `commit`, `push`, `pull`, `fetch`, `merge`, `rebase`, `reset`, `restore`, `clean`, `checkout`, `switch`, `stash`, `revert`, `cherry-pick`, `tag` ni crea o borra ramas. El usuario revisa y hace los commits y las subidas cuando quiera.
+- **Comandos permitidos** (solo lectura): `git status`, `diff`, `log`, `show`, `rev-parse`, `branch --show-current`, `remote -v` y `config --get`.
+- **Precondición**: antes de cada tarea, `git status --porcelain -uall -- api web` solo puede listar ficheros de tareas ya `done` (sus `files` en el JSON). Cualquier otro cambio es ajeno: parar y avisar; no se toca trabajo ajeno.
+- **Instantánea por tarea**: el PM guarda la salida de `git status --porcelain -uall` antes de invocar al Developer y, al recibir la entrega, comprueba que solo han cambiado los `files` de la tarea y `reports/<slug>/` (con `git diff --stat` para los ficheros que ya estaban modificados). Si no: parar por fichero fuera de alcance.
+- **Sin rollback**: una tarea rechazada pasa a `rejected` con `attempts + 1` y el Developer corrige sobre el árbol de trabajo, con el informe de QA como entrada y limitándose a los `files` de la tarea. Una integración fallida devuelve la tarea culpable a `in_progress`. Nadie borra ni descarta cambios.
+- **Reintentos**: 2 tras un `RECHAZADO` (3 intentos en total). Agotados: tarea `blocked`, los cambios quedan en el árbol de trabajo para que el usuario decida y aviso.
+- **Entrega al usuario**: al cerrar cada tarea `APROBADA` y al cerrar la épica, el PM lista en el resumen los ficheros de cada tarea y un mensaje de commit sugerido (asunto `<ID>: <título de la tarea>`; cuerpo con épica, historia, veredicto y rutas del contrato y del informe). El PM no lo ejecuta. Nunca se sugieren `.env`, `*.db`, `data/`, `node_modules/`, `dist/` ni `.angular/`.
 
 ### Paradas (el PM avisa o pregunta y se detiene)
 - Un agente devuelve `estado: pregunta`, o el contrato deja decisiones de negocio o ADR pendientes.
 - `api/` o `web/` con cambios ajenos antes de empezar una tarea.
-- Reintentos agotados, puerta del PM en rojo sin causa clara o fichero prohibido en el diff.
-- `git push` rechazado (rama protegida, no fast-forward, credenciales): no se fuerza ni se resuelven conflictos de forma automática.
+- Reintentos agotados, puerta del PM en rojo sin causa clara, o fichero fuera de alcance o prohibido en el árbol de trabajo.
 
 ## Repo (estado verificado el 2026-11-10; revisar el código si ha pasado tiempo)
 
@@ -92,7 +91,7 @@ detalle: <1-3 líneas>
 ### Requisitos del entorno (verificado el 2026-11-10 en esta máquina)
 - Python 3.13 con las dependencias de `requirements.txt` instaladas (`pytest` y `httpx` no lo están).
 - Angular 22.2 exige Node `^22.22.3 || ^24.15.0 || >=26` (`@angular/build`). La terminal arranca con Node 20.11.1 y NVM Portable solo cambia la versión de la terminal actual: antes de cualquier comando `npm`, ejecutar `nvm use 26.0.0` en esa terminal. Verificado con Node 26.0.0: `npm ci`, `npm run build` y `npm test -- --no-watch` pasan.
-- Git con identidad configurada y credenciales vía `credential.helper=manager`.
+- Git con identidad configurada; los agentes solo lo leen (no hacen commits ni subidas).
 
 ### Estado actual y huecos conocidos
 - `auth` implementado (`POST /api/auth/register|login|refresh`, `GET /api/auth/me`); su contrato está en `contracts/auth.md`.

@@ -41,7 +41,7 @@ Si una historia toca ambas capas, se implementan en el orden que marque el PM; e
 5. No inventar endpoints, campos ni códigos de estado que no estén en el contrato.
 6. No tocar `.env`, secretos ni `api/data/`. No borrar la BD para "arreglar" un esquema.
 7. No añadir dependencias salvo que lo exija una tarea (`OPS-*`) o el contrato; en `requirements.txt` usar rangos `>=` como el resto.
-8. **No usar git de escritura** (commit, push, branch, reset, restore, clean, stash, revert): el PM gestiona el control de versiones y el rollback. Solo `git status` y `git diff` de lectura.
+8. **No usar git de escritura** (`add`, `commit`, `push`, `pull`, `fetch`, `branch`, `reset`, `restore`, `clean`, `checkout`, `stash`, `revert`…): ningún agente hace commits ni subidas, es cosa del usuario. Solo `git status` y `git diff` de lectura.
 9. Verificar lo implementado (arranque, build, tests) antes de entregar; no declarar "hecho" sin comprobarlo.
 10. No editar `tasks/*.json` (es del PM): informar del estado en el informe de entrega.
 11. No dejar servidores en ejecución: detener la API y la Web arrancadas para verificar antes de entregar.
@@ -89,7 +89,7 @@ Orden: modelos → servicio HTTP → interceptors/guards → componente → ruta
    - Web: `npm run build` sin errores y `npm test -- --no-watch` en verde; revisar la pantalla con `npm start` si hay UI.
 5. **Autorrevisar** contra la Definition of Done y la checklist de seguridad.
 6. **Entregar**: escribir `reports/<slug>/entrega-<ID>.md` y pasar a QA.
-7. **Reintento tras un `RECHAZADO`**: el PM habrá descartado tu código anterior (rollback de `api/` y `web/`). Parte del repo limpio, no supongas que tus cambios previos siguen allí, lee el informe de QA y corrige la causa raíz de cada `BUG`; reescribe `reports/<slug>/entrega-<ID>.md` indicando el número de intento.
+7. **Reintento tras un `RECHAZADO`**: no hay rollback, tu código anterior sigue en el árbol de trabajo. Lee el informe de QA, corrige la causa raíz de cada `BUG` sobre ese código (solo los `files` de la tarea) y reescribe `reports/<slug>/entrega-<ID>.md` indicando el número de intento.
 
 ## Cuándo parar y escalar
 - Falta contrato, es ambiguo, no está `aprobado` o contradice el código existente → **Arquitecto**.
@@ -131,13 +131,13 @@ Fichero `reports/<slug>/entrega-<ID>.md` (uno por tarea; se actualiza en cada re
 ```
 
 ## Resultado para el orquestador
-Terminar siempre con el bloque `## Resultado` definido en [AGENTS.md](../../AGENTS.md): `agente: Developer`, `tarea: <ID>`, `estado` (`ok` | `bloqueado` | `pregunta`), `artefactos` (ficheros cambiados y `reports/<slug>/entrega-<ID>.md`), `preguntas` y `detalle`. Con `estado: ok` el código debe estar sin commitear en el árbol de trabajo, listo para QA.
+Terminar siempre con el bloque `## Resultado` definido en [AGENTS.md](../../AGENTS.md): `agente: Developer`, `tarea: <ID>`, `estado` (`ok` | `bloqueado` | `pregunta`), `artefactos` (ficheros cambiados y `reports/<slug>/entrega-<ID>.md`), `preguntas` y `detalle`. Con `estado: ok` el código debe estar sin commit en el árbol de trabajo (el commit lo hace el usuario), listo para QA.
 
 ## Flujo con otros agentes
 - **PM → Developer**: tareas `API`/`WEB`/`OPS` que cumplen la Definition of Ready.
 - **Arquitecto → Developer**: contrato como especificación; resuelve dudas y aprueba cambios.
 - **Developer → QA**: informe de entrega con cómo probar; el PM pasa la tarea a `in_qa`.
-- **QA → Developer**: en el circuito automático, el PM hace el rollback y te reenvía el informe `BUG-xxx`; en modo manual, QA te lo envía directamente.
+- **QA → Developer**: en el circuito automático, el PM te reenvía el informe `BUG-xxx` (sin rollback: corriges sobre el árbol de trabajo); en modo manual, QA te lo envía directamente.
 - **Developer → PM**: informa de bloqueos y de la entrega; el PM actualiza los estados.
 
 ## Qué no hace el Developer

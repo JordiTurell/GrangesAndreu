@@ -40,7 +40,7 @@ Contexto compartido (stack, comandos, estructura, huecos conocidos, circuito y e
 4. Si falta una herramienta (`pytest`, `httpx`, Playwright), **no se instala**: se pide al PM como tarea `OPS-*`.
 5. No dar nada por aprobado sin haberlo ejecutado; toda conclusión lleva evidencia (comando, salida, petición y respuesta).
 6. Pruebas aisladas y repetibles: BD temporal (`DATABASE_URL` a un fichero temporal), `SECRET_KEY` de prueba; nunca `api/data/app.db` ni el `.env` de desarrollo.
-7. No ejecutar acciones destructivas (borrar `api/data`, reiniciar BD compartida) sin confirmación. **QA nunca usa git de escritura** (commit, push, restore, clean, reset): el commit y el rollback son del PM.
+7. No ejecutar acciones destructivas (borrar `api/data`, reiniciar BD compartida) sin confirmación. **QA nunca usa git de escritura** (`add`, `commit`, `push`, `pull`, `fetch`, `restore`, `clean`, `reset`, `checkout`, `stash`, `revert`…): ningún agente hace commits, subidas ni rollbacks, es cosa del usuario.
 8. El contrato es la referencia: cualquier diferencia entre contrato e implementación es un defecto, aunque "funcione".
 9. No exponer secretos ni tokens completos en los reportes (truncar o enmascarar).
 10. Un test inestable (*flaky*) se arregla o se reporta; no se ignora. No editar `tasks/*.json` (es del PM).
@@ -103,7 +103,7 @@ Contexto compartido (stack, comandos, estructura, huecos conocidos, circuito y e
 - Falta un requisito o el criterio de aceptación no es verificable → **PM**.
 
 ## Reporte de defecto
-Los `BUG-NNN` van en `reports/<slug>/qa-<ID>.md` y son únicos dentro de la épica; el PM los enlaza en el campo `bugs` de la tarea. El informe sobrevive al rollback y es la entrada del siguiente intento del Developer: cada defecto debe bastar para reproducirlo y corregirlo.
+Los `BUG-NNN` van en `reports/<slug>/qa-<ID>.md` y son únicos dentro de la épica; el PM los enlaza en el campo `bugs` de la tarea. El informe es la entrada del siguiente intento del Developer (que corrige sobre el árbol de trabajo, sin rollback): cada defecto debe bastar para reproducirlo y corregirlo.
 
 ```markdown
 ### BUG-001 · <título breve>
@@ -121,7 +121,7 @@ Los `BUG-NNN` van en `reports/<slug>/qa-<ID>.md` y son únicos dentro de la épi
 ```markdown
 # Informe QA · <slug> · <ID tarea> (EP-xx)
 **Veredicto:** APROBADO | RECHAZADO
-**Alcance verificado:** tareas API-xxx, WEB-xxx   **Commit/estado:**
+**Alcance verificado:** tareas API-xxx, WEB-xxx   **Estado del árbol:** ficheros modificados (`git status --porcelain`)
 **Estado propuesto por tarea:** done | rejected
 
 ## Resumen
@@ -143,7 +143,7 @@ Qué no se ha podido probar y por qué; herramientas que se piden al PM como `OP
 ```
 
 ## Criterios de veredicto
-El veredicto es binario: el PM solo sube a git lo `APROBADO`.
+El veredicto es binario: el PM solo da por `done` lo `APROBADO` (el commit lo hace el usuario).
 - **APROBADO**: todos los criterios de aceptación se cumplen, sin `BUG` S1, S2 ni S3 abiertos, build y regresión en verde, y contrato y OpenAPI coherentes. Los S4 y los huecos de cobertura se anotan en el informe para que el PM los pase al backlog; no bloquean.
 - **RECHAZADO**: algún S1, S2 o S3 abierto, un criterio de aceptación incumplido, el build roto o una regresión. El PM descartará el código de la tarea y la reintentará.
 
@@ -152,9 +152,9 @@ Terminar siempre con el bloque `## Resultado` definido en [AGENTS.md](../../AGEN
 
 ## Flujo con otros agentes
 - **Developer → QA**: informe de entrega con cómo probar.
-- **QA → Developer**: en modo manual, defectos directos al Developer con copia al PM; en el circuito automático los recibe a través del PM tras el rollback. Tras la corrección, QA repite el caso fallido y la regresión relacionada.
+- **QA → Developer**: en modo manual, defectos directos al Developer con copia al PM; en el circuito automático los recibe a través del PM (sin rollback: corrige sobre el árbol de trabajo). Tras la corrección, QA repite el caso fallido y la regresión relacionada.
 - **QA → Arquitecto**: discrepancias de contrato o decisiones de diseño pendientes.
-- **QA → PM**: veredicto, estado propuesto por tarea (`done` o `rejected`), huecos de cobertura y herramientas necesarias como tareas `OPS-*`; el PM actualiza `tasks/*.json`, y con `APROBADO` hace commit y push.
+- **QA → PM**: veredicto, estado propuesto por tarea (`done` o `rejected`), huecos de cobertura y herramientas necesarias como tareas `OPS-*`; el PM actualiza `tasks/*.json` y, con `APROBADO`, cierra la tarea y propone el commit al usuario.
 
 ## Qué no hace QA
 - No modifica código de producción, tests unitarios del Developer ni el contrato.

@@ -4,7 +4,7 @@ Guía visual del circuito PM → Arquitecto → Developer → QA. Los diagramas 
 
 ## 1. Visión general
 
-El PM es el centro del circuito: invoca a los demás como subagentes, recibe su bloque `## Resultado` y decide el siguiente paso. Es el único que usa git de escritura.
+El PM es el centro del circuito: invoca a los demás como subagentes, recibe su bloque `## Resultado` y decide el siguiente paso. **Ningún agente hace commits ni subidas a git**: el código queda en el árbol de trabajo y los commits los haces tú con los mensajes que propone el PM.
 
 ```mermaid
 flowchart LR
@@ -15,7 +15,7 @@ flowchart LR
         DEV["Developer<br/>implementa"]
         QA["QA<br/>verifica"]
     end
-    GIT[("Git · main")]
+    GIT[("Git · main<br/>solo escribes tú")]
 
     U -->|petición| PM
     PM -->|tarea ARQ| ARQ
@@ -24,7 +24,8 @@ flowchart LR
     DEV -->|código sin commit + entrega| PM
     PM -->|tarea entregada| QA
     QA -->|veredicto + bugs| PM
-    PM -->|commit y push solo si APROBADO| GIT
+    PM -->|si APROBADO: tarea done y commit sugerido| U
+    U -->|revisas, commiteas y subes| GIT
     PM -.->|pregunta o aviso| U
 ```
 
@@ -56,7 +57,7 @@ sequenceDiagram
     participant ARQ as Arquitecto
     participant DEV as Developer
     participant QA
-    participant G as Git
+    participant G as Git (solo tú)
 
     U->>PM: Petición
     PM->>PM: Precondición: api/ y web/ sin cambios ajenos
@@ -66,33 +67,33 @@ sequenceDiagram
     alt Decisión de negocio o ADR pendiente
         PM-->>U: Pregunta y se detiene
     else Contrato aprobable
-        PM->>PM: Estado aprobado y replanifica
-        PM->>G: Commit ARQ-001 (plan, contrato, ADR) y push
+        PM->>PM: Estado aprobado y replanifica (sin commit)
     end
     loop Cada tarea OPS, API o WEB
+        PM->>PM: Instantánea de git status
         PM->>DEV: Implementa la tarea (con informe de QA si es reintento)
         DEV-->>PM: Código sin commit + entrega-ID.md + Resultado
         PM->>QA: Verifica la tarea
         QA-->>PM: qa-ID.md + veredicto + bugs
         alt APROBADO
-            PM->>PM: Puertas del PM
-            PM->>G: Commit ID: título y push
+            PM->>PM: Puertas del PM, tarea done y commit sugerido
         else RECHAZADO
-            PM->>PM: Rollback de api/ y web/
-            Note over PM,DEV: Reintento con el informe de QA (máximo 3 intentos)
+            PM->>PM: attempts + 1 (sin rollback)
+            Note over PM,DEV: Reintento sobre el árbol de trabajo con el informe de QA (máximo 3 intentos)
         end
     end
     PM->>QA: Tareas QA de integración
-    PM-->>U: Resumen y commits de la épica
+    PM-->>U: Resumen, ficheros por tarea y commits sugeridos
+    U->>G: Revisas, commiteas y subes
 ```
 
-## 3. Bucle de una tarea (aprobación, rollback y paradas)
+## 3. Bucle de una tarea (aprobación, reintento y paradas)
 
 ```mermaid
 flowchart TD
     A([Tarea desbloqueada]) --> B{"api/ y web/ sin cambios ajenos?"}
     B -->|no| S1([Parar y avisar al usuario])
-    B -->|sí| C["status: in_progress"]
+    B -->|sí| C["status: in_progress<br/>guarda instantánea de git status"]
     C --> D["Developer implementa<br/>lee qa-ID.md si es reintento"]
     D --> E{"Resultado del Developer"}
     E -->|bloqueado o pregunta| S2([Parar y preguntar])
@@ -103,23 +104,19 @@ flowchart TD
     H -->|APROBADO| I{"Puertas del PM en verde?"}
     I -->|no| S3([Parar y avisar])
     I -->|sí| J["status: done"]
-    J --> K["git commit ID: título"]
-    K --> L["git push origin HEAD"]
-    L --> M{"Push aceptado?"}
-    M -->|no| S4([Parar sin forzar])
-    M -->|sí| N([Siguiente tarea])
+    J --> K["Anota ficheros y commit sugerido<br/>para el resumen (no lo ejecuta)"]
+    K --> N([Siguiente tarea])
 
-    H -->|RECHAZADO| R["Rollback: git restore y git clean<br/>solo en api/ y web/"]
-    R --> T["status: rejected<br/>attempts + 1"]
+    H -->|RECHAZADO| T["status: rejected<br/>attempts + 1 (sin rollback)"]
     T --> V{"attempts menor que 3?"}
     V -->|sí| C
     V -->|no| W["status: blocked"]
-    W --> S5([Parar y avisar<br/>repo en el último commit bueno])
+    W --> S5([Parar y avisar<br/>los cambios quedan en el árbol])
 
     classDef stop fill:#fde2e2,stroke:#c0392b,color:#7b1d1d
     classDef ok fill:#e2f5e6,stroke:#2e8b57,color:#14532d
-    class S1,S2,S3,S4,S5 stop
-    class N,J,K,L ok
+    class S1,S2,S3,S5 stop
+    class N,J,K ok
 ```
 
 ## 4. Estados de una tarea
@@ -131,9 +128,9 @@ stateDiagram-v2
     todo --> blocked: dependencia bloqueada
     in_progress --> in_qa: entrega lista
     in_progress --> blocked: bloqueo o pregunta
-    in_qa --> done: QA APROBADO, commit y push
-    in_qa --> rejected: QA RECHAZADO, rollback
-    rejected --> in_progress: reintento
+    in_qa --> done: QA APROBADO, commit sugerido
+    in_qa --> rejected: QA RECHAZADO
+    rejected --> in_progress: reintento sobre el árbol de trabajo
     rejected --> blocked: 3 intentos agotados
     blocked --> in_progress: desbloqueada
     done --> [*]
@@ -141,19 +138,18 @@ stateDiagram-v2
 
 ## 5. Qué pasa con el código
 
-Nada entra en el historial sin aprobar. El código vive sin commit hasta que QA lo aprueba.
+Ningún agente hace commits ni subidas. Todo el código queda sin commit en el árbol de trabajo hasta que lo revisas y lo commiteas tú.
 
 ```mermaid
 flowchart LR
     W["Código sin commit<br/>árbol de trabajo"]
-    W -->|QA APROBADO y puertas OK| C["Commit y push<br/>historial limpio"]
-    W -->|QA RECHAZADO| X["Rollback<br/>git restore y git clean"]
-    C -->|fallo en integración| V["git revert y push<br/>sin reescribir historial"]
-    X -->|reintento| W
-    V -->|reintento| W
+    W -->|QA APROBADO y puertas OK| D["Tarea done<br/>y commit sugerido"]
+    W -->|QA RECHAZADO| R["Developer corrige<br/>sobre el árbol (sin rollback)"]
+    R -->|reintento| W
+    D -->|lo ejecutas tú| C["git commit y push<br/>historial"]
 ```
 
-Prohibido para todos los agentes: `push --force`, `--no-verify`, `--amend`, `rebase`, `reset --hard`, `clean -x`. Developer y QA no usan git de escritura.
+Para todos los agentes está prohibido cualquier `git` de escritura (`add`, `commit`, `push`, `pull`, `fetch`, `restore`, `clean`, `reset`, `revert`, `rebase`, `checkout`, `stash`…). Solo se permite git de lectura (`status`, `diff`, `log`, `show`, `rev-parse`).
 
 ## 6. Comportamiento interno de cada agente
 
@@ -163,9 +159,9 @@ flowchart LR
     A["Leer README, AGENTS y código"] --> B["Plan: épica, historias y tareas<br/>tasks/slug.json y .md"]
     B --> C{"Solo planificar?"}
     C -->|sí| D([Entrega el plan y para])
-    C -->|no| E["Orquestar el circuito<br/>subagentes y git"]
+    C -->|no| E["Orquestar el circuito<br/>subagentes (git solo lectura)"]
     E --> F["Actualizar estados<br/>en tasks/slug.json"]
-    F --> G([Resumen final al usuario])
+    F --> G([Resumen final y commits sugeridos])
 ```
 
 ### Arquitecto
@@ -186,7 +182,7 @@ flowchart LR
 flowchart LR
     A["Validar entrada<br/>contrato aprobado y tarea desbloqueada"] -->|falta o es ambiguo| X([Escalar a Arquitecto o PM])
     A --> B{"Es reintento?"}
-    B -->|sí| C["Leer qa-ID.md<br/>partir del repo limpio"]
+    B -->|sí| C["Leer qa-ID.md<br/>corregir sobre el árbol de trabajo"]
     B -->|no| D
     C --> D["Implementar por capas"]
     D --> E["Tests unitarios"]
@@ -212,11 +208,11 @@ flowchart LR
 
 | | PM | Arquitecto | Developer | QA |
 |---|---|---|---|---|
-| **Misión** | Planifica, orquesta y cierra en git | Diseña el contrato antes de codificar | Implementa la tarea | Verifica con evidencia |
+| **Misión** | Planifica, orquesta y propone el commit | Diseña el contrato antes de codificar | Implementa la tarea | Verifica con evidencia |
 | **Entrada** | Petición del usuario | Tarea `ARQ-*` | Tarea `API/WEB/OPS-*` + contrato aprobado (+ `qa-ID.md` si reintento) | Entrega del Developer |
-| **Salida** | `tasks/`, commits y push | `contracts/<slug>.md`, `contracts/adr/` | Código, tests unitarios, `entrega-ID.md` | `qa-ID.md`, `BUG-NNN`, veredicto |
+| **Salida** | `tasks/` y commits sugeridos (no ejecutados) | `contracts/<slug>.md`, `contracts/adr/` | Código, tests unitarios, `entrega-ID.md` | `qa-ID.md`, `BUG-NNN`, veredicto |
 | **Herramientas** | read, search, edit, execute, todo, agent | read, search, edit, todo | read, search, edit, execute, todo | read, search, edit, execute, todo |
-| **Git** | Escribe (commit, push, rollback, revert) | No | Solo lectura | Solo lectura |
+| **Git** | Solo lectura | No (sin terminal) | Solo lectura | Solo lectura |
 | **Edita `tasks/*.json`** | Sí (único) | No | No | No |
 | **No hace** | Código de producción ni contratos | Implementar ni planificar | Rediseñar contratos ni cambiar alcance | Corregir código ni instalar herramientas |
 
@@ -244,13 +240,12 @@ flowchart LR
 | Un agente devuelve `estado: pregunta` | Te pregunta y espera |
 | Contrato con decisión de negocio o ADR pendiente | Te pregunta; el contrato sigue en `draft` |
 | `api/` o `web/` con cambios ajenos | Para antes de empezar la tarea |
-| 3 intentos fallidos de una tarea | Marca `blocked`, deja el repo en el último commit bueno y avisa |
-| Puerta del PM en rojo o fichero prohibido en el diff | Para y avisa |
-| `git push` rechazado | Para y avisa; no fuerza ni resuelve conflictos |
+| 3 intentos fallidos de una tarea | Marca `blocked`, deja los cambios en el árbol de trabajo y avisa |
+| Puerta del PM en rojo o fichero fuera de alcance o prohibido | Para y avisa |
 
 ## 10. Cómo usarlo
 
 1. Elige el agente **PM** en el selector de chat.
 2. Describe lo que quieres. Añade "solo planifica" si no quieres que ejecute el circuito.
-3. Antes del primer uso, deja `api/` y `web/` sin cambios pendientes en git.
-4. Revisa los commits de la épica con `git log --oneline` cuando termine.
+3. Antes del primer uso, deja `api/` y `web/` sin cambios ajenos pendientes (los de tareas ya aprobadas de la épica no cuentan).
+4. Al terminar, revisa `git status` y ejecuta tú los commits sugeridos y la subida.
