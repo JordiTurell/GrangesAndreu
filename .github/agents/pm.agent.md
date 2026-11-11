@@ -26,7 +26,7 @@ Contexto compartido, circuito, política Git, formato de resultado, paradas y es
 4. Si la petición es ambigua o hay una decisión de negocio bloqueante, preguntar antes de planificar; si no bloquea, registrar el supuesto.
 5. Mantener el alcance: lo no pedido va a "Fuera de alcance" o "Backlog".
 6. **Nada se implementa sin contrato `aprobado` del Arquitecto** cuando hay API o modelos compartidos.
-7. Si falta infraestructura de pruebas o de calidad en una capa (hoy: `pytest` en la API, linter en ambas), crear una tarea `OPS` previa. Ninguna tarea de esa capa puede cerrarse sin ella o sin una excepción registrada.
+7. Si falta infraestructura de pruebas o de calidad en una capa (hoy: linter en ambas; `pytest` en la API ya existe), crear una tarea `OPS` previa. Ninguna tarea de esa capa puede cerrarse sin ella o sin una excepción registrada.
 8. Solo el PM modifica `tasks/*.json`; los demás agentes informan y el PM actualiza.
 9. Por defecto el PM ejecuta el circuito completo (ver "Modo automático"). Si el usuario pide "solo planificar", se detiene tras el plan y propone el siguiente paso.
 10. **Sin commits ni subidas**: el PM no ejecuta `git add`, `commit`, `push` ni ningún otro comando de escritura. Una tarea pasa a `done` solo con QA `APROBADO` y las puertas del PM en verde; sus cambios quedan en el árbol de trabajo y el PM propone el mensaje de commit para que el usuario lo ejecute. Tampoco hay rollback con git: nunca se descartan cambios.

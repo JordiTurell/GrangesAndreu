@@ -5,21 +5,21 @@
 
 ## Historias
 - US-01 · Como desarrollador del equipo quiero una infraestructura de tests para la API con BD temporal para verificar cambios sin tocar la BD real ni la configuración local
-  - [ ] `pytest` y `httpx2` en `api/requirements.txt` con rangos `>=` (sin `httpx`)
-  - [ ] `api/tests/` con fixture de BD SQLite temporal (`get_db` sobrescrito) y `TestClient`
-  - [ ] Test de humo de `GET /health` en verde
-  - [ ] No se crea ni modifica `api/data/app.db` ni se requiere `api/.env`
+  - [x] `pytest` y `httpx2` en `api/requirements.txt` con rangos `>=` (sin `httpx`)
+  - [x] `api/tests/` con fixture de BD SQLite temporal (`get_db` sobrescrito) y `TestClient`
+  - [x] Test de humo de `GET /health` en verde
+  - [x] No se crea ni modifica `api/data/app.db` ni se requiere `api/.env`
 - US-02 · Como usuario que se registra quiero que una contraseña que supera el límite de bcrypt en bytes se rechace con un error de validación claro para no recibir un 500
-  - [ ] 40 letras "ñ" (80 bytes) en `register` → 422 claro, no 500
-  - [ ] 72 bytes exactos se aceptan y 73 se rechazan con 422
-  - [ ] `login` con más de 72 bytes no devuelve 500
-  - [ ] Tests unitarios (Developer) y de integración (QA), con el límite exacto
-  - [ ] ADR-004 aceptado y contrato de auth actualizado
+  - [x] 40 letras "ñ" (80 bytes) en `register` → 422 claro, no 500
+  - [x] 72 bytes exactos se aceptan y 73 se rechazan con 422
+  - [x] `login` con más de 72 bytes no devuelve 500
+  - [x] Tests unitarios (Developer) y de integración (QA), con el límite exacto
+  - [x] ADR-004 aceptado y contrato de auth actualizado (queda por corregir la cabecera de `contracts/auth.md`, ver backlog)
 - US-03 · Como desarrollador del equipo quiero que la API arranque con la configuración documentada en `.env.example`, desde cualquier directorio y sin efectos laterales si falla, para poner en marcha el entorno local sin errores de configuración
-  - [ ] Un `api/.env` copiado de `.env.example` (`CORS_ORIGINS` con comas) arranca la API; el formato lista JSON sigue funcionando
-  - [ ] Una `DATABASE_URL` SQLite relativa se resuelve respecto a `api/` y se crea el directorio de la BD, con independencia del cwd
-  - [ ] Un arranque que falla por configuración no crea `api/data/`
-  - [ ] Con variables ya válidas el comportamiento no cambia
+  - [x] Un `api/.env` copiado de `.env.example` (`CORS_ORIGINS` con comas) arranca la API; el formato lista JSON sigue funcionando
+  - [x] Una `DATABASE_URL` SQLite relativa se resuelve respecto a `api/` y se crea el directorio de la BD, con independencia del cwd
+  - [x] Un arranque que falla por configuración no crea `api/data/`
+  - [x] Con variables ya válidas el comportamiento no cambia
 
 ## Tablero
 | ID | Capa | Tarea | Responsable | Depende de | Prio | Tamaño | Estado | Bugs |
@@ -27,9 +27,9 @@
 | ARQ-001 | arq | Resolver ADR-004 y contrato del límite de contraseña en bytes | arquitecto | — | P0 | S | done | — |
 | ARQ-002 | arq | Revisar el contrato de EP-01: httpx2 y configuración de arranque | arquitecto | ARQ-001 | P0 | S | done | — |
 | OPS-002 | ops | Arranque fiable de la API con la configuración documentada (sin tests; entrega con ST-01, ST-02, ST-04, ST-07) | developer | ARQ-002 | P0 | S | done | BUG-001 (cerrado) |
-| OPS-001 | ops | Infraestructura de tests de la API (pytest, httpx2, fixture de BD temporal) y unitarios de configuración | developer | ARQ-002, OPS-002 | P0 | S | todo | — |
-| API-001 | api | Rechazar con 422 las contraseñas que superan 72 bytes UTF-8 (ADR-004) | developer | ARQ-001, OPS-001 | P0 | S | todo | — |
-| QA-001 | qa | Tests de integración del límite de contraseña en bytes y regresión de arranque (ST-01 a ST-10) | qa | API-001 | P1 | S | todo | — |
+| OPS-001 | ops | Infraestructura de tests de la API (pytest, httpx2, fixture de BD temporal) y unitarios de configuración | developer | ARQ-002, OPS-002 | P0 | S | done | BUG-002 (S4), BUG-003 (S4) |
+| API-001 | api | Rechazar con 422 las contraseñas que superan 72 bytes UTF-8 (ADR-004) | developer | ARQ-001, OPS-001 | P0 | S | done | BUG-004 (S4), BUG-005 (S4) |
+| QA-001 | qa | Tests de integración del límite de contraseña en bytes y regresión de arranque (ST-01 a ST-10) | qa | API-001 | P1 | S | done | — |
 
 ## Camino crítico y paralelización
 ```
@@ -49,4 +49,8 @@ Un único árbol de trabajo y precondición de `api/` limpio: todo se ejecuta en
 | R-07 | Cambiar el parseo de `CORS_ORIGINS` puede romper el `api/.env` local (JSON) o el de `.env.example` (comas) | media | media | El contrato exige ambos formatos; QA los verifica con variables de entorno sin tocar `api/.env`; el PM comprueba al final que la API arranca con el `api/.env` existente |
 
 ## Siguiente paso
-OPS-002 `done` (QA APROBADO en el intento 2, `reports/base-tests-password/qa-OPS-002.md`; BUG-001 cerrado). Siguiente tarea: `OPS-001` (Developer; entrada: este plan y `contracts/base-tests-password.md` §4.2 y §7.6.1), después `API-001` y `QA-001`. Backlog nuevo de QA: OBS-8 (`OSError` de `Path.resolve()` con rutas SQLite relativas que mezclan `:` y dígitos Unicode no ASCII, S4) y ajustes de redacción de DB-1, DB-3 y FX-C en el contrato. Parada pendiente: `web/angular.json` lleva un cambio ajeno que el usuario va a gestionar. Al cerrar la épica, el PM ejecuta la comprobación final de §7.6.3 con el `api/.env` real sin tocarlo. Preflight verificado el 2026-11-10: `main`, remoto accesible, `api/` y `web/` limpios, Python 3.13.5, identidad git configurada; `api/.env` y `api/data/app.db` locales (ignorados por git y fuera del alcance de las tareas).
+**Épica cerrada (2026-11-11).** Las 6 tareas están `done` con QA `APROBADO` (OPS-002 en el intento 2, el resto en el 1) y 189 tests de la API en verde (`reports/base-tests-password/qa-QA-001.md`). Comprobación final de §7.6.3 con el `api/.env` real: `list 1 True`, código 0 y `api/data/app.db` sin cambios. `AGENTS.md` y los agentes Developer, PM y QA ya reflejan que existe `pytest` y el límite de contraseña en bytes.
+
+**Backlog consolidado (S4, no bloquea):** BUG-002 (CO-08 con aserción débil) y BUG-003 (`pytest --help` deja un directorio temporal vacío), BUG-004 (sustituto Unicode aislado `"\ud800"` da 500 en el handler 422 de FastAPI; ADR-001), BUG-005 (cwd `api/tests/unit` con ruta relativa: pytest no carga `tests/conftest.py`), OBS-8 (`OSError` de `Path.resolve()` con rutas SQLite relativas que mezclan `:` y dígitos Unicode no ASCII), el hash bcrypt en el log SQL con `DEBUG=true` (`echo=settings.debug`), `pydantic ValidationError` con `input_value` (candidato `hide_input_in_errors=True`), versiones de dependencias sin fijar. Para el Arquitecto (se aborda en ARQ-003 de EP-02): cabecera de `contracts/auth.md` aún dice «pendiente de API-001», redacción de §7.5 y §8 del contrato sobre el sustituto Unicode (BUG-004) y de DB-1, DB-3 y FX-C.
+
+Siguiente: EP-02 `auth-completo` (`tasks/auth-completo.json`), empezando por `ARQ-003`. Precondición pendiente de EP-02: el árbol de trabajo debe quedar commiteado por el usuario antes de abrir `API-002`.

@@ -1,16 +1,31 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+from pydantic_core import PydanticCustomError
 
-from app.core.security import MAX_PASSWORD_BYTES
+from app.core.security import MAX_PASSWORD_BYTES, exceeds_password_limit
+
+
+def _check_password_bytes(password: str) -> str:
+    if exceeds_password_limit(password):
+        raise PydanticCustomError(
+            "password_too_long",
+            "La contraseña no puede superar los {max_bytes} bytes en UTF-8",
+            {"max_bytes": MAX_PASSWORD_BYTES},
+        )
+    return password
 
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80)
     email: EmailStr
-    password: str = Field(min_length=8, max_length=MAX_PASSWORD_BYTES)
+    password: Annotated[str, AfterValidator(_check_password_bytes)] = Field(
+        min_length=8,
+        description="Mínimo 8 caracteres y máximo 72 bytes en UTF-8 (límite de bcrypt).",
+    )
 
 
 class UserRead(BaseModel):

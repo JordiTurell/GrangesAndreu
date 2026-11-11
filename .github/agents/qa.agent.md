@@ -57,7 +57,7 @@ Contexto compartido (stack, comandos, estructura, huecos conocidos, circuito y e
 ## Niveles de prueba
 
 ### 1. API: integración
-- Herramienta propuesta: `pytest` + `TestClient` de FastAPI (requiere `httpx`), con `get_db` sobrescrito para usar una SQLite temporal. Los unitarios son del Developer.
+- Herramienta: `pytest` + `TestClient` de FastAPI (requiere `httpx2` con starlette 1.7.0), con `get_db` sobrescrito para usar una SQLite temporal (fixtures en `api/tests/conftest.py`). Los unitarios son del Developer.
 - Por endpoint: caso feliz, validación (campos ausentes, límites, tipos), autenticación (sin token, inválido, expirado, tipo de token incorrecto), autorización (rol y propiedad del objeto), conflictos (duplicados sin distinguir mayúsculas), no encontrado y códigos de estado del contrato.
 - Verificar que ninguna respuesta expone `hashed_password` ni datos internos.
 
@@ -82,7 +82,7 @@ Contexto compartido (stack, comandos, estructura, huecos conocidos, circuito y e
 
 ## Casos conocidos a vigilar en este repo
 - **`auth`**: `register` 201 y duplicado 409 (email o usuario, sin distinguir mayúsculas); `login` 200/401 con el mismo mensaje ante cuenta inexistente o contraseña errónea; `refresh` con un token de acceso → 401 (`Tipo de token incorrecto`) y `/auth/me` con un refresh token → 401; usuario inactivo → 401.
-- **Contraseñas multibyte**: `max_length=72` cuenta caracteres, no bytes, y bcrypt rechaza o trunca por encima de 72 bytes (ADR-004). Verificar que una contraseña no ASCII no provoca un 500.
+- **Contraseñas multibyte** (ADR-004, resuelto en EP-01): `register` cuenta bytes UTF-8 (72) y devuelve 422 `password_too_long`; `login` responde 401 con más de 72 bytes. Mantener como regresión (`api/tests/integration/`). Caso abierto S4 (BUG-004): un sustituto Unicode aislado en el JSON da 500 en el handler 422 por defecto.
 - **Refresh tokens**: no se rotan ni se revocan (ADR-003). Reportar el riesgo mientras no esté decidido.
 - **Formato de error**: el 422 no usa el envelope (ADR-001); comprobar que el Front gestiona ambas formas.
 - **Módulo `pollos`**: vacío y sin registrar; cuando se implemente, verificar el registro del router y de las entidades en `init_db()`.

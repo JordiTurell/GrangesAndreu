@@ -8,7 +8,7 @@
   "scope": "both",
   "mode": "auto",
   "assumptions": [
-    "EP-01 (base-tests-password) se cierra antes de empezar EP-02 (decisión del usuario): EP-02 reutiliza api/tests/ y toca los mismos ficheros (schemas.py, security.py, config.py, requirements.txt).",
+    "EP-01 (base-tests-password) está cerrada (2026-11-11): EP-02 reutiliza api/tests/ y toca los mismos ficheros (schemas.py, security.py, config.py, requirements.txt), siempre tras commit del usuario.",
     "Recuperación de contraseña en modo desarrollo: no se envía correo; el enlace de reseteo se escribe en el log de la API. Debe quedar desactivado fuera de modo debug (el Arquitecto decide el mecanismo). SMTP real queda en backlog.",
     "El token de reseteo caduca a los 30 minutos (decisión del usuario) y es de un solo uso.",
     "Sin verificación de email: el registro es directo (decisión del usuario).",
@@ -17,7 +17,7 @@
     "ADR-007 (roles y permisos) se reduce a estos dos roles globales; el ámbito por granja y roles de granja quedan fuera.",
     "Añadir el rol a la tabla users exige una estrategia de cambio de esquema (no hay migraciones, ADR-005 pendiente y api/data/app.db ya tiene la tabla): la decide el Arquitecto en ARQ-003 (confirmado por el usuario); borrar o recrear la BD solo con confirmación del usuario.",
     "Una tarea WEB depende del contrato, no de la implementación de la API, salvo que necesite datos reales.",
-    "web/angular.json lleva un cambio ajeno (analytics del CLI de Angular, no pertenece a ninguna tarea): el usuario lo gestiona él mismo (lo commitea o lo revierte) y avisa al PM antes de reanudar EP-01 (parada del PM)."
+    "web/angular.json llevó un cambio ajeno (analytics del CLI de Angular) que el usuario gestionó y commiteó (2026-11-11)."
   ],
   "out_of_scope": [
     "Envío real de correo (SMTP o proveedor): backlog; en esta épica solo modo desarrollo con log",
@@ -89,7 +89,7 @@
       "story": "US-03",
       "layer": "arq",
       "title": "Contrato API de recuperación de contraseña y roles admin/user",
-      "description": "Decidir y documentar en contracts/auth-completo.md y contracts/auth.md: (a) endpoints, esquemas, errores y modelo de datos del reseteo (token hasheado, un solo uso, 30 minutos, respuesta sin enumeración, qué ocurre con tokens previos y con los refresh tokens ya emitidos, ADR-003); (b) mecanismo del modo desarrollo del enlace (log) y cómo se garantiza que no se active fuera de debug, más la URL base del Front; (c) modelo de roles admin y user: columna en users, valor por defecto, qué devuelve /me, dependencia para exigir rol, cómo se crea el primer admin y por qué el registro no admite elegir rol; (d) estrategia para añadir la columna a users con api/data/app.db existente (ADR-005); (e) decisión sobre rate limiting. Resolver o crear los ADR necesarios (ADR-003, ADR-005, ADR-007 reducido, ADR de recuperación). Registrar como pregunta cualquier decisión de negocio.",
+      "description": "Decidir y documentar en contracts/auth-completo.md y contracts/auth.md: (a) endpoints, esquemas, errores y modelo de datos del reseteo (token hasheado, un solo uso, 30 minutos, respuesta sin enumeración, qué ocurre con tokens previos y con los refresh tokens ya emitidos, ADR-003); (b) mecanismo del modo desarrollo del enlace (log) y cómo se garantiza que no se active fuera de debug, más la URL base del Front; (c) modelo de roles admin y user: columna en users, valor por defecto, qué devuelve /me, dependencia para exigir rol, cómo se crea el primer admin y por qué el registro no admite elegir rol; (d) estrategia para añadir la columna a users con api/data/app.db existente (ADR-005); (e) decisión sobre rate limiting. Resolver o crear los ADR necesarios (ADR-003, ADR-005, ADR-007 reducido, ADR de recuperación). Registrar como pregunta cualquier decisión de negocio. Aprovechar para corregir la cabecera de contracts/auth.md (aun dice pendiente de API-001), la redacción de la sección 7.5 y 8 de contracts/base-tests-password.md sobre el sustituto Unicode aislado (BUG-004) y la de DB-1, DB-3 y FX-C (backlog de EP-01).",
       "files": [
         "contracts/auth-completo.md",
         "contracts/auth.md",
@@ -104,7 +104,7 @@
       "size": "M",
       "status": "todo",
       "attempts": 0,
-      "blocked_reason": "Espera al cierre de EP-01 (QA-001 de base-tests-password)",
+      "blocked_reason": "",
       "bugs": [],
       "definition_of_done": [
         "Contrato en estado aprobado con endpoints, esquemas, errores y criterios verificables para Developer y QA",

@@ -89,7 +89,7 @@ detalle: <1-3 líneas>
 - `settings` y `engine` se crean al importar `main` y el lifespan llama a `init_db()` sobre el engine global: en pruebas hay que fijar `DEBUG` y `DATABASE_URL` en el entorno **antes** de importar; sobrescribir `get_db` no basta. Importar `main` también ejecuta `bootstrap.ensure_dependencies()` (pip, necesita red): instalar antes `requirements.txt`.
 
 ### Requisitos del entorno (verificado el 2026-11-10 en esta máquina)
-- Python 3.13 con las dependencias de `requirements.txt` instaladas (`pytest` y `httpx` no lo están).
+- Python 3.13 con las dependencias de `requirements.txt` instaladas (incluidos `pytest` y `httpx2`; `TestClient` de starlette 1.7.0 exige `httpx2`, no `httpx`). Los tests se ejecutan con `cd api` y `python -m pytest` (`pytest.exe` no está en el PATH).
 - Angular 22.2 exige Node `^22.22.3 || ^24.15.0 || >=26` (`@angular/build`). La terminal arranca con Node 20.11.1 y NVM Portable solo cambia la versión de la terminal actual: antes de cualquier comando `npm`, ejecutar `nvm use 26.0.0` en esa terminal. Verificado con Node 26.0.0: `npm ci`, `npm run build` y `npm test -- --no-watch` pasan.
 - Git con identidad configurada; los agentes solo lo leen (no hacen commits ni subidas).
 
@@ -97,10 +97,10 @@ detalle: <1-3 líneas>
 - `auth` implementado (`POST /api/auth/register|login|refresh`, `GET /api/auth/me`); su contrato está en `contracts/auth.md`.
 - `pollos` está vacío y sin registrar en `api/main.py`. No hay más módulos de dominio.
 - Sin migraciones: `create_all` no altera tablas existentes y no hay Alembic.
-- Sin tests ni `pytest` en la API; un único test en la Web (`app.spec.ts`, que espera el título placeholder `Hello, web`). Sin linter en ninguna capa.
+- API con tests (`api/tests/`: fixtures de BD temporal en `conftest.py`, `unit/` del Developer e `integration/` de QA; 189 tests en verde el 2026-11-11). Un único test en la Web (`app.spec.ts`, que espera el título placeholder `Hello, web`). Sin linter en ninguna capa.
 - El Front no tiene `provideHttpClient`, interceptors, servicios, modelos ni URL base de la API; `app.routes.ts` está vacío; el login simula la llamada y navega a `/dashboard`, que no existe.
 - `app.routes.server.ts` prerenderiza todas las rutas (`**`).
 - Los errores de dominio usan `{"error": {"code", "message"}}`, pero los 422 de validación usan el formato por defecto de FastAPI (`detail`).
 - Los refresh tokens son *stateless*: no se rotan ni se revocan.
-- El límite de contraseña (`max_length=72`) cuenta caracteres, mientras que bcrypt limita bytes.
+- El límite de contraseña de `register` se cuenta en bytes UTF-8 (72, ADR-004) y devuelve 422 `password_too_long`; `login` sigue acotando en caracteres y responde 401 con más de 72 bytes. Un sustituto Unicode aislado (`"\ud800"`) en el JSON da 500 en el handler 422 de FastAPI (BUG-004, backlog de ADR-001).
 

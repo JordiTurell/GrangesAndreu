@@ -25,12 +25,22 @@ MAX_PASSWORD_BYTES = 72
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def exceeds_password_limit(password: str) -> bool:
+    """Única fuente del criterio ADR-004: bytes UTF-8 sin normalización Unicode."""
+    return len(password.encode("utf-8")) > MAX_PASSWORD_BYTES
+
+
 def hash_password(password: str) -> str:
+    if exceeds_password_limit(password):
+        raise ValueError(f"La contraseña no puede superar los {MAX_PASSWORD_BYTES} bytes en UTF-8")
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
     try:
+        # Dentro del try: un texto no codificable (UnicodeEncodeError es ValueError) también da False.
+        if exceeds_password_limit(password):
+            return False
         return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
     except ValueError:
         return False

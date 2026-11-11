@@ -50,7 +50,7 @@ Si una historia toca ambas capas, se implementan en el orden que marque el PM; e
 - El Developer escribe los **tests unitarios** de lo que implementa. Los de integración, contrato, e2e y regresión son de QA.
 - Frontera con QA: un test que levanta la app con `TestClient` o usa la BD es de integración (QA). El Developer prueba esquemas, servicios y utilidades de forma aislada; la fixture base de tests de la API (`conftest.py`) la crea la tarea `OPS`.
 - Web: `*.spec.ts` junto al fichero, con `TestBed` y Vitest. Si se sustituye la plantilla placeholder de `app.html`, actualizar `app.spec.ts` (hoy espera `Hello, web`).
-- API: tests unitarios en `api/tests/unit/` cuando exista la infraestructura. Hoy no hay `pytest`; instalarlo es una tarea `OPS-*` del PM. Sin ella, no se añade en silencio: se indica en el informe de entrega.
+- API: tests unitarios en `api/tests/unit/` con las fixtures de `api/tests/conftest.py` (`python -m pytest` desde `api/`). Instalar herramientas nuevas de test o lint sigue siendo una tarea `OPS-*` del PM.
 - Ejecutar siempre `npm test -- --no-watch` (sin modo watch).
 
 ## Guía Backend (`api/app/modules/<modulo>/`)
