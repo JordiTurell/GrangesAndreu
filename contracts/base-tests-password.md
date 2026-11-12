@@ -5,6 +5,8 @@
 > Épica: infraestructura de tests de la API (US-01), rechazo con 422 de las contraseñas de más de 72 bytes UTF-8 (US-02, [ADR-004](adr/ADR-004-password-bytes.md)) y arranque fiable de la API con la configuración documentada en `.env.example` (US-03, §4.3). El comportamiento del módulo `auth` sigue descrito en [auth.md](auth.md), que se actualiza con esta épica; US-03 no afecta a `auth.md`.
 >
 > Revisión ARQ-002 (2026-11-10): se añaden EP-01-D4 a EP-01-D8 y la sección 4.3; lo aprobado de ADR-004 (§3, §4.1, §7.2 a §7.5) no cambia. EP-01-D4 corrige §4.2 y §7.1 (`httpx` pasa a `httpx2`).
+>
+> Revisión ARQ-003 de EP-02 (2026-11-11): solo cambios de redacción sin efecto funcional, del backlog de QA-001: §7.5 y §8 (sustituto Unicode aislado, BUG-004), DB-1, DB-3 y FX-C de §4.3.
 
 ## 1. Decisiones (ADR)
 | ID | Decisión | Alternativas | Motivo | Consecuencias |
@@ -114,9 +116,9 @@ Ficheros: `api/app/core/config.py` y `api/requirements.txt` (solo subir `pydanti
 - CORS-5 No se normaliza ni se valida cada origen (barra final, mayúsculas, `*`, esquema): se pasan tal cual a `CORSMiddleware`, como hoy.
 
 **`DATABASE_URL`:**
-- DB-1 `sqlite_file_database` devuelve `url.database` (con `sqlalchemy.engine.make_url`) solo si el backend es `sqlite` y `database` no es `None`, `""` ni `":memory:"` y no empieza por `file:` (forma URI). Si `make_url` no puede parsear la cadena (`ArgumentError`) devuelve `None` y **no** lanza: el fallo sigue ocurriendo en `create_engine`, como hoy, sin un camino de error nuevo.
+- DB-1 `sqlite_file_database` devuelve `url.database` (con `sqlalchemy.engine.make_url`) solo si el backend es `sqlite` y `database` no es `None`, `""` ni `":memory:"` y no empieza por `file:` (forma URI). Si `make_url` no puede parsear la cadena (`ArgumentError`, o `ValueError` por un puerto no numérico o vacío o un corchete IPv6 sin cerrar) devuelve `None` y **no** lanza: el fallo sigue ocurriendo en `create_engine`, como hoy, sin un camino de error nuevo.
 - DB-2 Ruta **absoluta** (`Path(database).is_absolute()` o empieza por `/` o `\`): `resolve_database_url` devuelve la **misma cadena** de entrada, sin volver a renderizarla (así `sqlite:///C:/…` o `sqlite:////tmp/…` y la URL de F-1 quedan idénticas).
-- DB-3 Ruta **relativa**: `abs = (base_dir / database).resolve()` (no exige que exista; sin `expanduser`; `..` permitido). La URL devuelta es la misma con `database` sustituida por `abs.as_posix()`, conservando driver y parámetros de consulta (`render_as_string(hide_password=False)`). El resultado no depende del cwd.
+- DB-3 Ruta **relativa**: `abs = (base_dir / database).resolve()` (no exige que exista; sin `expanduser`; `..` permitido). La URL devuelta es la original con la ruta sustituida **textualmente**: se parte en `:///`, se reemplaza la ruta (hasta un `?` eventual) por `abs.as_posix()` y se conservan el prefijo (driver) y los parámetros de consulta. No se usa `render_as_string`, que codifica `C:` como `C%3A` (SQLAlchemy 2.1). El resultado no depende del cwd.
 - DB-4 Sin fichero SQLite (no SQLite, `:memory:`, `sqlite://`, URI `file:` o no parseable): se devuelve la misma cadena y no se crea ningún directorio.
 - DB-5 Vacía: se aplica el defecto de `_apply_defaults` (ruta absoluta bajo `DATA_DIR`), que pasa por DB-2.
 - DB-6 Ningún texto de excepción o aviso nuevo incluye valores de variables (una URL puede llevar credenciales).
@@ -124,7 +126,7 @@ Ficheros: `api/app/core/config.py` y `api/requirements.txt` (solo subir `pydanti
 **Efectos y compatibilidad:**
 - FX-A `Settings()` y las funciones puras no crean directorios ni ficheros.
 - FX-B El único `mkdir` es `ensure_database_directory`, llamado solo desde `get_settings()` tras construir `Settings` sin error. Cualquier fallo de configuración (`SECRET_KEY` ausente con `DEBUG=false`, JSON de CORS inválido, `PORT` no numérico…) deja el sistema de ficheros intacto: ni `api/data/` ni otro directorio ni fichero.
-- FX-C Con variables ya válidas el comportamiento no cambia: mismos defectos y avisos, `api/data/` se crea como hoy con `DATABASE_URL` vacía y las URL absolutas conservan la misma cadena. El `api/.env` local con `CORS_ORIGINS` en JSON sigue funcionando y `.env.example` (comas, `sqlite:///./data/app.db`) pasa a funcionar sin editarlo.
+- FX-C Con variables ya válidas el comportamiento no cambia, salvo la creación del directorio padre de una ruta SQLite absoluta (`ensure_database_directory` lo crea; antes solo se creaba `api/data/`): mismos defectos y avisos, `api/data/` se crea como hoy con `DATABASE_URL` vacía y las URL absolutas conservan la misma cadena. El `api/.env` local con `CORS_ORIGINS` en JSON sigue funcionando y `.env.example` (comas, `sqlite:///./data/app.db`) pasa a funcionar sin editarlo.
 - FX-D `settings = get_settings()` sigue evaluándose al importar `app.core.config`, así que importar el módulo puede crear el directorio del SQLite (de ahí F-1).
 
 ## 5. Fragmento OpenAPI 3.1
@@ -222,7 +224,7 @@ Usuario y email únicos en cada caso.
 - Los tokens y contraseñas no se copian a los informes (truncar).
 - `/openapi.json` cumple §5: `UserCreate.password` con `minLength: 8`, sin `maxLength` y con `description` que menciona "72 bytes"; `LoginRequest.password` con `minLength: 1` y `maxLength: 72`.
 - Regresión: `python -m pytest` completo en verde.
-- Observaciones no bloqueantes (se anotan como S4): el 422 incluye `input` con la contraseña rechazada (ver §8); el comportamiento ante contraseñas con sustitutos Unicode aislados (`"\ud800"`) en `register`; en `login` debe dar 401, nunca 500.
+- Observaciones no bloqueantes (se anotan como S4): el 422 incluye `input` con la contraseña rechazada (ver §8). Un sustituto Unicode aislado (`"\ud800"`) en el JSON da 500 en el handler 422 por defecto de FastAPI (`UnicodeEncodeError` al serializar `input`; BUG-004, preexistente a API-001 y ligado a ADR-001): no se exige ningún código HTTP concreto para él en `register` ni en `login`, y ningún test de integración lo fija como esperado. Solo se garantiza en unitario que `verify_password("\ud800", hash)` devuelve `False`.
 
 ### 7.6 US-03 · arranque con la configuración documentada (OPS-002)
 Niveles: **U** = unitario (Developer, `api/tests/unit/test_config.py`, entregado en OPS-001; EP-01-D8), **S** = subproceso sobre copia temporal de `api/` (QA). Ningún caso lee ni modifica `api/.env` ni `api/data/app.db`.
@@ -286,10 +288,10 @@ Preparación común:
 
 ## 8. Fuera de alcance y preguntas abiertas
 - ADR-001 (envelope de los 422). Entrada para ese ADR: el 422 por defecto devuelve `detail[].input` con la contraseña rechazada; debería omitirse para `password`.
-- Contraseñas con caracteres no codificables en UTF-8 (sustitutos aislados) en `register`: no se garantiza el 422; solo `login` se garantiza sin 500 (vía `verify_password`).
+- Contraseñas con caracteres no codificables en UTF-8 (sustitutos aislados, `"\ud800"`) en el JSON de cualquier endpoint: el handler 422 por defecto de FastAPI da 500 al serializar `input` (BUG-004, preexistente a API-001). No se garantiza un código HTTP concreto en `register` ni en `login`; la garantía se limita al unitario `verify_password(...)` → `False`. Entrada para ADR-001 (handler propio de `RequestValidationError`).
 - Linter, CI, tests de otros endpoints de `auth`, cambios en la Web, rate limiting de `login`, reglas de complejidad de contraseña y migraciones.
 - Fuera de alcance de US-03: validar o normalizar cada origen CORS (barra final, `*` junto con `allow_credentials=True`), soporte de URI `file:` o de rutas relativas en otros motores, preparar el almacenamiento de motores no SQLite, fijar versiones exactas de dependencias (backlog, riesgo R-06 del plan) y cambiar el comportamiento de `DEBUG` o `SECRET_KEY`.
-- Tras API-001, el PM actualiza el hueco conocido de `AGENTS.md` y el caso conocido de `qa.agent.md` sobre `max_length=72`.
+- Tras API-001, el PM actualiza el hueco conocido de `AGENTS.md` y el caso conocido de `qa.agent.md` sobre `max_length=72`, y [auth.md](auth.md) (su cabecera «pendiente de API-001» se corrigió en la revisión de ARQ-003 de EP-02).
 - Observación para ADR-001 / backlog: cuando la configuración es inválida, el `ValidationError` de pydantic puede mostrar `input_value` con el contenido de las variables leídas (incluidas credenciales de `DATABASE_URL` o `SECRET_KEY`); candidato `hide_input_in_errors=True` en `model_config`. No se hace aquí para no cambiar el formato de error existente.
 - Supuestos de OPS-002: `api/.env.example` **no cambia** (si el PM quiere documentar en él los dos formatos de `CORS_ORIGINS`, es un cambio de comentarios sin efecto funcional y decisión suya); el `api/.env` local usa `CORS_ORIGINS` en JSON y no se lee en ninguna prueba; el SQLite local `api/data/app.db` ya existe y su ruta no cambia.
 - Impacto en el plan (para el PM, que es quien edita `tasks/`): (1) criterio de US-01 y descripción de OPS-001: `httpx` → `httpx2`; (2) OPS-001: añadir `api/tests/unit/__init__.py` y `api/tests/unit/test_config.py`, `depends_on` OPS-002 y un punto de DoD (unitarios de §7.6.1 en verde); (3) OPS-002: añadir `api/requirements.txt` a `files` y precisar "sin tests; entrega con ST-01, ST-02, ST-04 y ST-07"; (4) QA-001: añadir los ST-xx de regresión en `api/tests/integration/`; (5) riesgo R-06 del plan: indicar `httpx2`.

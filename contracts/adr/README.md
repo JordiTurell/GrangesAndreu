@@ -20,13 +20,14 @@ Decisiones **transversales** del proyecto. Las decisiones locales a una épica s
 
 | ID | Tema | Estado | Bloquea o afecta a |
 |----|------|--------|--------------------|
-| ADR-001 | Formato de error de validación (422 de FastAPI vs. envelope `{error:{code,message}}`) | pendiente | Manejo de errores en el Front, contratos de todos los módulos |
-| ADR-002 | Almacenamiento y refresco de tokens en el Front compatible con SSR (memoria, `localStorage`, cookies `HttpOnly`) y significado de "Recordarme" | pendiente | Login Web, guards, interceptors |
-| ADR-003 | Rotación y revocación de refresh tokens (hoy *stateless*) | pendiente | `POST /api/auth/refresh` |
+| [ADR-001](ADR-001-errores-validacion.md) | Formato de error de validación: handler propio del 422 con envelope `{error:{code,message,fields}}` sin `input` (cierra BUG-004) y normalizador único en el Front | aceptado | Contratos de todos los módulos, API-005, manejo de errores del Front. Sustituye al `detail` por defecto en [auth](../auth.md) y [auth-completo](../auth-completo.md) |
+| [ADR-002](ADR-002-tokens-front.md) | Tokens en el Front: access en memoria, refresh en `localStorage` (Recordarme) o `sessionStorage`, refresco reactivo con una sola petición en vuelo; cookies `HttpOnly` con BFF como evolución | aceptado | Login Web, guards, interceptors, `AuthService` (WEB-001) |
+| [ADR-003](ADR-003-refresh-tokens.md) | Revocación de refresh tokens: `users.token_version` y claim `tv`, sin rotación por uso | aceptado | `refresh`, `get_current_user`, `reset-password` |
 | [ADR-004](ADR-004-password-bytes.md) | Límite de contraseña en bytes (bcrypt 72 bytes) frente a `max_length` en caracteres | aceptado | `register` y `login` |
-| ADR-005 | Estrategia de migraciones (Alembic o equivalente) | pendiente | Cualquier cambio de una tabla existente |
-| ADR-006 | `RenderMode` SSR por ruta (privadas sin `Prerender`) | pendiente | `app.routes.server.ts` |
-| ADR-007 | Modelo de roles y permisos (operario, responsable de granja, administrador) y ámbito por granja | pendiente | Todos los módulos de dominio |
+| [ADR-005](ADR-005-migraciones.md) | Migraciones mínimas propias, aditivas e idempotentes (`core/migrations.py`); criterios de paso a Alembic | aceptado | Cualquier cambio de una tabla existente (OPS-003) |
+| [ADR-006](ADR-006-rendermode.md) | `RenderMode` por ruta: solo `login`, `register` y `forgot-password` en `Prerender`; `reset-password` (token en la URL) y todo lo demás (`**`) en `Client` | aceptado | `app.routes.server.ts`, `index.html`, `server.ts` (WEB-001, WEB-003) |
+| [ADR-007](ADR-007-roles.md) | Roles globales `admin` y `user` (alcance reducido; ámbito por granja y roles de granja, fuera) | aceptado | `users.role`, `/me`, `require_role` |
 | ADR-008 | Mecanismo del chat en tiempo real (WebSocket, SSE o polling) | pendiente | Módulo de chat |
 | ADR-009 | Modelado del control de horarios (jornadas, solapamientos, necesidad de operario) | pendiente | Módulo de horarios |
 | ADR-010 | Zonas horarias y formato de fechas | pendiente | Horarios, tareas, inspecciones |
+| [ADR-011](ADR-011-recuperacion-password.md) | Recuperación de contraseña: token hasheado de 30 min y un solo uso, enlace solo en log con `DEBUG=true`, rate limiting en backlog | aceptado | `forgot-password`, `reset-password`, `shared/mail.py` |
