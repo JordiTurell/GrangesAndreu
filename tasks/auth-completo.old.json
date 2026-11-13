@@ -1,0 +1,628 @@
+{
+  "epic": {
+    "id": "EP-02",
+    "slug": "auth-completo",
+    "title": "Autenticación completa: login, registro, recuperación de contraseña y roles admin/user",
+    "goal": "Que la app tenga login y registro reales (Web contra la API), recuperación de contraseña (forgot/reset) con enlace en modo desarrollo y dos roles globales, admin y user."
+  },
+  "scope": "both",
+  "mode": "auto",
+  "assumptions": [
+    "EP-01 (base-tests-password) está cerrada (2026-11-11): EP-02 reutiliza api/tests/ y toca los mismos ficheros (schemas.py, security.py, config.py, requirements.txt), siempre tras commit del usuario.",
+    "Recuperación de contraseña en modo desarrollo: no se envía correo; el enlace de reseteo se escribe en el log de la API. Debe quedar desactivado fuera de modo debug (el Arquitecto decide el mecanismo). SMTP real queda en backlog.",
+    "El token de reseteo caduca a los 30 minutos (decisión del usuario) y es de un solo uso.",
+    "Sin verificación de email: el registro es directo (decisión del usuario).",
+    "Hay dos roles globales: admin y user. Todo usuario registrado tiene siempre un rol. Confirmado por el usuario (2026-11-11): el registro público siempre crea rol user y el payload de registro no admite elegir rol (evita escalada de privilegios).",
+    "El primer admin se crea con variables de entorno al arrancar la API (decisión del usuario, 2026-11-11); el Arquitecto define nombres, validación y comportamiento en ARQ-003 sin tocar api/.env.",
+    "ADR-007 (roles y permisos) se reduce a estos dos roles globales; el ámbito por granja y roles de granja quedan fuera.",
+    "Añadir el rol a la tabla users exige una estrategia de cambio de esquema (no hay migraciones, ADR-005 pendiente y api/data/app.db ya tiene la tabla): la decide el Arquitecto en ARQ-003 (confirmado por el usuario); borrar o recrear la BD solo con confirmación del usuario.",
+    "Una tarea WEB depende del contrato, no de la implementación de la API, salvo que necesite datos reales.",
+    "web/angular.json llevó un cambio ajeno (analytics del CLI de Angular) que el usuario gestionó y commiteó (2026-11-11).",
+    "ADR-001 (ARQ-004) cambia el formato aprobado del 422 de la API (de detail por defecto a envelope error.fields sin input) y cierra BUG-004 para el handler: lo implementa API-005. Excepción documentada a la propiedad de tests: API-005 ajusta 3 ficheros de tests de integración de EP-01 (helpers.py, test_register_password_bytes.py, test_seguridad_y_contrato.py) para no dejar pytest en rojo; QA lo revisa en QA-003.",
+    "Supuestos reversibles de ARQ-004 aceptados por el PM (a confirmar por el usuario al cerrar la épica): Recordarme = sesión persistente hasta que caduque el refresh token de 7 días (sin él, sesión de pestaña); destino tras el login /inicio (pantalla privada mínima); login automático tras el registro."
+  ],
+  "out_of_scope": [
+    "Envío real de correo (SMTP o proveedor): backlog; en esta épica solo modo desarrollo con log",
+    "Verificación de email",
+    "Cambio de contraseña con sesión iniciada, 2FA y bloqueo de cuentas",
+    "Rate limiting de login y forgot-password: el Arquitecto registra la decisión; la implementación queda en backlog salvo que lo marque como requisito",
+    "Gestión de usuarios por el admin (alta, cambio de rol, baja) salvo que el Arquitecto la necesite para crear el primer admin",
+    "Roles por granja y resto de módulos de dominio (pollos, horarios, chat)",
+    "Pantalla dashboard y pantallas específicas de admin (solo existe /inicio, una pantalla privada mínima)",
+    "Guard por rol en el Front, cookies HttpOnly/BFF, logout en servidor y rotación de refresh tokens (backlog de ADR-002 y ADR-003)",
+    "e2e con Playwright (OPS-004, opcional P2, backlog)"
+  ],
+  "artifacts": {
+    "contract": "contracts/auth-completo.md",
+    "reports": "reports/auth-completo/"
+  },
+  "stories": [
+    {
+      "id": "US-01",
+      "as_a": "visitante",
+      "i_want": "registrarme desde la Web",
+      "so_that": "tener una cuenta con la que acceder a la app",
+      "acceptance_criteria": [
+        "Existe la pantalla de registro y el enlace del login apunta a ella",
+        "El registro crea la cuenta con rol user y no permite elegir el rol",
+        "Los errores de la API (409 de duplicados y 422 de validación) se muestran claros en el formulario",
+        "Tras registrarse el usuario queda en un estado coherente con el contrato (login o sesión iniciada)"
+      ]
+    },
+    {
+      "id": "US-02",
+      "as_a": "usuario registrado",
+      "i_want": "iniciar sesión desde la Web contra la API real",
+      "so_that": "acceder a las pantallas privadas con mi cuenta",
+      "acceptance_criteria": [
+        "El login llama a POST /api/auth/login y gestiona tokens según ADR-002",
+        "Credenciales inválidas muestran el mensaje de la API sin simulaciones",
+        "Existen guard de rutas privadas y refresco de sesión según el contrato",
+        "La sesión conoce el rol del usuario (admin o user)"
+      ]
+    },
+    {
+      "id": "US-03",
+      "as_a": "usuario que olvidó su contraseña",
+      "i_want": "solicitar un enlace de recuperación y fijar una contraseña nueva",
+      "so_that": "recuperar el acceso a mi cuenta",
+      "acceptance_criteria": [
+        "El enlace '¿Olvidaste tu contraseña?' lleva a una pantalla que solicita el email",
+        "La API responde igual exista o no el email (sin enumeración de cuentas) y en modo desarrollo escribe el enlace en el log",
+        "El token caduca a los 30 minutos y solo se puede usar una vez",
+        "La pantalla de reseteo valida la nueva contraseña con las mismas reglas que el registro (incluido el límite de 72 bytes, ADR-004)",
+        "Tras el reseteo se puede iniciar sesión con la contraseña nueva y no con la antigua"
+      ]
+    },
+    {
+      "id": "US-04",
+      "as_a": "responsable de la app",
+      "i_want": "que cada usuario tenga rol admin o user",
+      "so_that": "poder restringir funciones al rol admin en el futuro",
+      "acceptance_criteria": [
+        "Todo usuario tiene un rol; los usuarios existentes quedan con un rol válido tras el cambio de esquema",
+        "El rol se devuelve en GET /api/auth/me y la API dispone de una dependencia para exigir un rol",
+        "Se documenta cómo se crea el primer admin",
+        "Un usuario no puede asignarse el rol admin desde el registro público"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "ARQ-003",
+      "story": "US-03",
+      "layer": "arq",
+      "title": "Contrato API de recuperación de contraseña y roles admin/user",
+      "description": "Decidir y documentar en contracts/auth-completo.md y contracts/auth.md: (a) endpoints, esquemas, errores y modelo de datos del reseteo (token hasheado, un solo uso, 30 minutos, respuesta sin enumeración, qué ocurre con tokens previos y con los refresh tokens ya emitidos, ADR-003); (b) mecanismo del modo desarrollo del enlace (log) y cómo se garantiza que no se active fuera de debug, más la URL base del Front; (c) modelo de roles admin y user: columna en users, valor por defecto, qué devuelve /me, dependencia para exigir rol, cómo se crea el primer admin y por qué el registro no admite elegir rol; (d) estrategia para añadir la columna a users con api/data/app.db existente (ADR-005); (e) decisión sobre rate limiting. Resolver o crear los ADR necesarios (ADR-003, ADR-005, ADR-007 reducido, ADR de recuperación). Registrar como pregunta cualquier decisión de negocio. Aprovechar para corregir la cabecera de contracts/auth.md (aun dice pendiente de API-001), la redacción de la sección 7.5 y 8 de contracts/base-tests-password.md sobre el sustituto Unicode aislado (BUG-004) y la de DB-1, DB-3 y FX-C (backlog de EP-01).",
+      "files": [
+        "contracts/auth-completo.md",
+        "contracts/auth.md",
+        "contracts/base-tests-password.md",
+        "contracts/adr/README.md",
+        "contracts/adr/ADR-003-refresh-tokens.md",
+        "contracts/adr/ADR-005-migraciones.md",
+        "contracts/adr/ADR-007-roles.md",
+        "contracts/adr/ADR-011-recuperacion-password.md"
+      ],
+      "owner": "arquitecto",
+      "depends_on": [],
+      "priority": "P0",
+      "size": "M",
+      "status": "done",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Contrato en estado aprobado con endpoints, esquemas, errores y criterios verificables para Developer y QA",
+        "ADR-003, ADR-005, ADR-007 y el de recuperación aceptados o con pregunta registrada",
+        "Estrategia para añadir la columna de rol a users sin perder datos ni borrar la BD sin confirmación",
+        "contracts/auth.md coherente con el contrato nuevo",
+        "Bloque Resultado con estado ok y sin decisiones de negocio pendientes"
+      ]
+    },
+    {
+      "id": "ARQ-004",
+      "story": "US-02",
+      "layer": "arq",
+      "title": "Diseño Angular de autenticación: rutas, sesión, guards y pantallas",
+      "description": "Decidir y documentar en el contrato: ADR-001 (formato de errores 422 en el Front), ADR-002 (almacenamiento de tokens compatible con SSR y significado de Recordarme), ADR-006 (RenderMode por ruta: privadas, login, registro y reseteo con token en la URL), rutas y guards, AuthService, interceptor de Authorization y de refresco, modelos TS (incluido el rol), tratamiento de las dos formas de error, destino tras login y tras registro, y pantallas de registro, forgot-password y reset-password (componentes y campos).",
+      "files": [
+        "contracts/auth-completo.md",
+        "contracts/auth.md",
+        "contracts/adr/README.md",
+        "contracts/adr/ADR-001-errores-validacion.md",
+        "contracts/adr/ADR-002-tokens-front.md",
+        "contracts/adr/ADR-006-rendermode.md"
+      ],
+      "owner": "arquitecto",
+      "depends_on": ["ARQ-003"],
+      "priority": "P0",
+      "size": "M",
+      "status": "done",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Diseño Angular aprobado con rutas, servicios, interceptor, guards y modelos TS",
+        "ADR-001, ADR-002 y ADR-006 aceptados",
+        "Criterios verificables para Developer y QA",
+        "Bloque Resultado con estado ok y sin decisiones de negocio pendientes"
+      ]
+    },
+    {
+      "id": "OPS-003",
+      "contract_refs": ["§2.3", "§7.2"],
+      "story": "US-04",
+      "layer": "ops",
+      "title": "Migraciones mínimas: añadir role y token_version a users sin perder datos (ADR-005)",
+      "description": "Implementar §2.3 del contrato: api/app/core/migrations.py con run_migrations y pasos aditivos idempotentes por inspección del esquema, invocado desde init_db() tras create_all, y api/tests/unit/test_migrations.py (criterios MG-xx de §7.2) con una BD anterior creada con el DDL congelado y dos usuarios sembrados y con una BD nueva. No toca requirements.txt. Ningún agente abre ni migra api/data/app.db; el usuario debe copiarlo antes de arrancar su API tras integrar el cambio (R-10).",
+      "files": [
+        "api/app/core/migrations.py",
+        "api/app/core/database.py",
+        "api/tests/unit/test_migrations.py"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-003"],
+      "priority": "P0",
+      "size": "S",
+      "status": "done",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Una BD con la tabla users anterior se actualiza sin perder usuarios y los existentes quedan con role user y token_version 0",
+        "Una BD nueva se crea con el esquema completo y la migración no hace nada; la migración es idempotente",
+        "Pasa antes y después de API-002 (entidad sin y con las columnas)",
+        "No se toca api/.env, requirements.txt ni api/data/app.db",
+        "Entrega documentada en reports/auth-completo/entrega-OPS-003.md, con la versión de sqlite3.sqlite_version"
+      ]
+    },
+    {
+      "id": "API-002",
+      "contract_refs": ["§1 ADR-007", "§2.1", "§3 register, me, require_role", "§4.1", "§4.2", "§4.5", "§7.1", "§7.3"],
+      "story": "US-04",
+      "layer": "api",
+      "title": "Roles admin y user y primer admin por variables de entorno",
+      "description": "Implementar según contrato (§2.1, §3, §4.1, §4.4, §4.5, §7.1 y §7.3): UserRole, columnas role y token_version con CHECK en la entidad, UserRead.role, register con rol user fijado por el servicio e ignorando cualquier role del body, dependencia require_role (403 forbidden), INITIAL_ADMIN_* en Settings con SecretStr y hide_input_in_errors, ensure_initial_admin idempotente llamado en el lifespan. controllers.py no cambia. Incluye tests unitarios del Developer.",
+      "files": [
+        "api/app/modules/auth/entities.py",
+        "api/app/modules/auth/schemas.py",
+        "api/app/modules/auth/services.py",
+        "api/app/core/security.py",
+        "api/app/core/config.py",
+        "api/main.py",
+        "api/tests/conftest.py",
+        "api/tests/unit/test_roles.py",
+        "api/tests/unit/test_initial_admin.py",
+        "api/tests/unit/test_config.py"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-003", "OPS-003"],
+      "priority": "P0",
+      "size": "M",
+      "status": "in_progress",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "register crea siempre rol user aunque el body lleve role admin",
+        "GET /api/auth/me y UserRead devuelven el rol",
+        "La dependencia de rol responde 403 a un user y 401 sin token (probada con una ruta de prueba montada por el test)",
+        "El primer admin se crea o promueve de forma idempotente con INITIAL_ADMIN_* y la contraseña no sale en logs ni errores",
+        "Tests unitarios en verde con pytest (los 189 existentes siguen en verde)",
+        "Entrega documentada en reports/auth-completo/entrega-API-002.md"
+      ]
+    },
+    {
+      "id": "API-004",
+      "contract_refs": ["§1 ADR-003", "§3 login y refresh", "§4.4", "§7.6"],
+      "story": "US-03",
+      "layer": "api",
+      "title": "Revocación de tokens por token_version (ADR-003)",
+      "description": "Implementar según contrato (§3 login/refresh, §4.4 y ADR-003): claim tv en los access y refresh tokens, comprobación en get_current_user y refresh_tokens (401 Token revocado cuando tv no coincide con user.token_version; tokens sin tv valen con version 0). Incluye tests unitarios del Developer.",
+      "files": [
+        "api/app/core/security.py",
+        "api/app/modules/auth/services.py",
+        "api/tests/unit/test_token_revocation.py"
+      ],
+      "owner": "developer",
+      "depends_on": ["API-002"],
+      "priority": "P0",
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Un token con tv distinto de user.token_version da 401 Token revocado en /me y en refresh",
+        "Los tokens sin tv siguen valiendo con token_version 0",
+        "Un refresh normal devuelve un par nuevo sin invalidar el anterior (limitación aceptada)",
+        "Tests unitarios en verde con pytest",
+        "Entrega documentada en reports/auth-completo/entrega-API-004.md"
+      ]
+    },
+    {
+      "id": "API-003",
+      "contract_refs": ["§1 ADR-011", "§2.2", "§3 forgot-password, reset-password", "§4.1", "§4.2", "§4.3", "§4.4", "§7.4", "§7.5"],
+      "story": "US-03",
+      "layer": "api",
+      "title": "Forgot-password y reset-password en la API (modo desarrollo)",
+      "description": "Implementar según contrato (§2.2, §3, §4.1 a §4.4, §7.4 y §7.5): entidad PasswordResetToken, esquemas, FRONTEND_BASE_URL y PASSWORD_RESET_EXPIRE_MINUTES, shared/mail.py (enlace en el log solo con DEBUG=true), errores InvalidTokenError y ExpiredTokenError, forgot-password con 202 uniforme y trabajo en segundo plano, y reset-password con consumo atómico, validación idéntica a register (ADR-004) e incremento de token_version. database.py no cambia. Incluye tests unitarios del Developer.",
+      "files": [
+        "api/app/modules/auth/entities.py",
+        "api/app/modules/auth/schemas.py",
+        "api/app/modules/auth/services.py",
+        "api/app/modules/auth/controllers.py",
+        "api/app/core/config.py",
+        "api/app/shared/mail.py",
+        "api/app/shared/exceptions.py",
+        "api/tests/unit/test_password_reset.py",
+        "api/tests/unit/test_mail.py"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-003", "API-002", "API-004"],
+      "priority": "P0",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "La solicitud responde 202 idéntico exista o no el email y en modo desarrollo escribe el enlace en el log",
+        "El token expira a los 30 minutos, solo sirve una vez, no se guarda en claro y el último pedido invalida los anteriores",
+        "El reseteo cambia la contraseña, la nueva se valida igual que en register y los tokens emitidos dejan de valer",
+        "Fuera de modo debug no se escribe el enlace en el log",
+        "Tests unitarios en verde con pytest",
+        "Entrega documentada en reports/auth-completo/entrega-API-003.md"
+      ]
+    },
+    {
+      "id": "API-005",
+      "contract_refs": ["§1 ADR-001", "§3 Formato del 422", "§7.8"],
+      "story": "US-02",
+      "layer": "api",
+      "title": "Handler propio del 422 con envelope sin input (ADR-001)",
+      "description": "Implementar según contrato (§3 Formato del 422, §5 y §7.8, ADR-001): api/app/shared/validation.py con el envelope error.fields sin input y con saneado de cadenas (cierra BUG-004 para el handler), registro del handler en exceptions.py, responses 422 con ValidationErrorResponse en las 5 operaciones con cuerpo de controllers.py, y tests unitarios VE-06, VE-08 y VE-09. Incluye el ajuste mecánico de 3 ficheros de tests de integración de EP-01 (excepción documentada a la propiedad de tests; QA lo revisa en QA-003) para no dejar pytest en rojo.",
+      "files": [
+        "api/app/shared/validation.py",
+        "api/app/shared/exceptions.py",
+        "api/app/modules/auth/controllers.py",
+        "api/tests/unit/test_validation_errors.py",
+        "api/tests/integration/helpers.py",
+        "api/tests/integration/test_register_password_bytes.py",
+        "api/tests/integration/test_seguridad_y_contrato.py"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-004", "API-003"],
+      "priority": "P0",
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Los 422 de register, login, refresh, forgot-password y reset-password devuelven error.code validation_error con fields sin input ni el valor enviado de password, new_password o token",
+        "Un sustituto Unicode aislado en el cuerpo no produce 500 (BUG-004)",
+        "Los 404, 405 y los errores de dominio no cambian",
+        "/openapi.json declara 422 con ValidationErrorResponse en las 5 operaciones",
+        "pytest completo en verde con los 3 ficheros de EP-01 ajustados y los tests unitarios nuevos",
+        "Entrega documentada en reports/auth-completo/entrega-API-005.md"
+      ]
+    },
+    {
+      "id": "QA-003",
+      "contract_refs": ["§3", "§5", "§7.1", "§7.2", "§7.3", "§7.4", "§7.5", "§7.6", "§7.8"],
+      "story": "US-03",
+      "layer": "qa",
+      "title": "Integración de la API: roles, primer admin, migración y recuperación de contraseña",
+      "description": "Escribir y ejecutar los tests de integración de API del contrato (§7): roles y require_role, registro que no permite admin, primer admin idempotente, migración de una BD anterior mediante init_db en subproceso sobre copia temporal, forgot/reset (feliz, caducado simulando el tiempo, reutilizado, inválido, respuesta uniforme, sin enumeración), revocación de tokens, enlace solo en DEBUG y ausencia de token y hashes en respuestas y logs, el envelope del 422 (VE-01 a VE-05, VE-07 y VE-10 de §7.8) y la revisión del ajuste de los 3 ficheros de tests de EP-01 hecho por API-005. Sin tocar api/data/app.db.",
+      "files": [
+        "api/tests/integration/test_roles.py",
+        "api/tests/integration/test_password_reset.py",
+        "api/tests/integration/test_initial_admin.py",
+        "api/tests/integration/test_migration_init_db.py",
+        "api/tests/integration/test_validation_errors.py"
+      ],
+      "owner": "qa",
+      "depends_on": ["API-005"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Casos de §7.1 a §7.6 del contrato cubiertos con evidencia",
+        "pytest completo en verde",
+        "api/data/app.db no cambia",
+        "Informe en reports/auth-completo/qa-QA-003.md"
+      ]
+    },
+    {
+      "id": "WEB-001",
+      "contract_refs": ["§6.1", "§6.2", "§6.3", "§6.4", "§6.5", "§6.6", "§6.7", "§6.8", "§6.10", "§7.7"],
+      "story": "US-02",
+      "layer": "web",
+      "title": "Base de sesión en Angular: HttpClient, interceptores, guards, servicios y rutas",
+      "description": "Implementar el diseño de ARQ-004 (§6.3 a §6.8, ADR-001, ADR-002 y ADR-006) sin tocar todavía el componente de login: environment y API_BASE_URL, normalizeApiError e interceptor de errores, interceptor de Authorization y de refresco, authGuard y guestGuard, sanitizeReturnUrl, modelos TS, AuthService, TokenStorageService, validadores de contraseña (bytes con TextEncoder), cascarón de la app (app.html solo con router-outlet, app.spec.ts reescrito), index.html y rutas públicas base (login con guestGuard y **), con sus *.spec.ts (FE-ER, FE-TK, FE-SV, FE-IN, FE-GD, FE-VL). Sin dependencias npm nuevas.",
+      "files": [
+        "web/src/environments/environment.ts",
+        "web/src/index.html",
+        "web/src/app/app.config.ts",
+        "web/src/app/app.routes.ts",
+        "web/src/app/app.routes.server.ts",
+        "web/src/app/app.ts",
+        "web/src/app/app.html",
+        "web/src/app/app.css",
+        "web/src/app/app.spec.ts",
+        "web/src/app/core/",
+        "web/src/app/modules/auth/models/",
+        "web/src/app/modules/auth/services/",
+        "web/src/app/modules/auth/validators/"
+      ],
+      "owner": "developer",
+      "depends_on": ["ARQ-004"],
+      "priority": "P0",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El access token solo vive en memoria y el refresh token en localStorage o sessionStorage según ADR-002, sin acceso a window ni localStorage en el servidor SSR",
+        "Interceptores, guards, normalizador de errores y AuthService cubiertos por *.spec.ts (criterios FE-* de nivel U de §7.7)",
+        "npm run build y npm test -- --no-watch en verde con Node 26.0.0; Prettier aplicado",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-001.md"
+      ]
+    },
+    {
+      "id": "WEB-004",
+      "contract_refs": ["§6.4", "§6.5", "§6.7", "§6.9", "§7.7"],
+      "story": "US-02",
+      "layer": "web",
+      "title": "Login real, pantalla de inicio y cierre de sesión",
+      "description": "Implementar el diseño de ARQ-004 (§6.9, EP-02-F1 y EP-02-F8): el LoginComponent usa AuthService (signals, inject(), Recordarme, errores de la API, returnUrl, avisos motivo) en lugar de la simulación y /dashboard; nueva pantalla privada mínima inicio (usuario, correo, rol y Cerrar sesión local) con authGuard. No toca todavía los dos enlaces href=# del login.",
+      "files": [
+        "web/src/app/modules/auth/login/login.component.ts",
+        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/modules/auth/login/login.component.spec.ts",
+        "web/src/app/modules/inicio/inicio/inicio.component.ts",
+        "web/src/app/modules/inicio/inicio/inicio.component.html",
+        "web/src/app/modules/inicio/inicio/inicio.component.css",
+        "web/src/app/modules/inicio/inicio/inicio.component.spec.ts",
+        "web/src/app/app.routes.ts"
+      ],
+      "owner": "developer",
+      "depends_on": ["WEB-001"],
+      "priority": "P0",
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El login llama a la API real, muestra los errores de la API y navega a returnUrl o a /inicio",
+        "/inicio es privada, muestra usuario, correo y rol y Cerrar sesión lleva a /login",
+        "npm run build y npm test -- --no-watch en verde con Node 26.0.0; Prettier aplicado",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-004.md"
+      ]
+    },
+    {
+      "id": "WEB-002",
+      "contract_refs": ["§6.4", "§6.7", "§6.8", "§6.9", "§7.7"],
+      "story": "US-01",
+      "layer": "web",
+      "title": "Pantalla de registro",
+      "description": "Implementar la pantalla de registro del diseño aprobado (username, email, contraseña), enlazada desde el login, con validación y errores de la API.",
+      "files": [
+        "web/src/app/modules/auth/register/register.component.ts",
+        "web/src/app/modules/auth/register/register.component.html",
+        "web/src/app/modules/auth/register/register.component.css",
+        "web/src/app/modules/auth/register/register.component.spec.ts",
+        "web/src/app/modules/auth/login/login.component.ts",
+        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/app.routes.ts",
+        "web/src/app/app.routes.server.ts"
+      ],
+      "owner": "developer",
+      "depends_on": ["WEB-004"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El enlace Regístrate aquí del login lleva a la pantalla",
+        "Muestra los errores 409 y 422 de la API",
+        "npm run build y npm test -- --no-watch en verde",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-002.md"
+      ]
+    },
+    {
+      "id": "WEB-003",
+      "contract_refs": ["§6.4", "§6.7", "§6.8", "§6.9", "§6.10", "§7.7"],
+      "story": "US-03",
+      "layer": "web",
+      "title": "Pantallas de forgot-password y reset-password",
+      "description": "Implementar las pantallas de solicitud de recuperación (email) y de reseteo con el token de la URL, según el diseño aprobado. Se enlaza desde el login.",
+      "files": [
+        "web/src/app/modules/auth/forgot-password/",
+        "web/src/app/modules/auth/reset-password/",
+        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/app.routes.ts",
+        "web/src/app/app.routes.server.ts",
+        "web/src/server.ts"
+      ],
+      "owner": "developer",
+      "depends_on": ["WEB-002"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "El enlace Olvidaste tu contraseña del login lleva a la pantalla",
+        "Mensaje de confirmación igual exista o no el email",
+        "Reseteo con token válido, caducado o ya usado muestra el resultado correcto",
+        "npm run build y npm test -- --no-watch en verde",
+        "Entrega documentada en reports/auth-completo/entrega-WEB-003.md"
+      ]
+    },
+    {
+      "id": "QA-002",
+      "contract_refs": ["§3", "§5", "§6", "§7"],
+      "story": "US-03",
+      "layer": "qa",
+      "title": "Integración API-Web del flujo completo de autenticación",
+      "description": "Verificar el flujo de extremo a extremo entre la API y la Web (la parte solo-API la cubre QA-003): registro, login, forgot y reset desde las pantallas (token válido, caducado, reutilizado), sesión con el rol de /me, CORS, tratamiento de errores del Front, SSR y build de las rutas nuevas, con tests persistentes de flujo en api/tests/integration/test_auth_flow.py y los pasos manuales documentados mientras no exista Playwright.",
+      "files": [
+        "api/tests/integration/test_auth_flow.py"
+      ],
+      "owner": "qa",
+      "depends_on": ["QA-003", "WEB-003"],
+      "priority": "P1",
+      "size": "M",
+      "status": "todo",
+      "attempts": 0,
+      "blocked_reason": "",
+      "bugs": [],
+      "definition_of_done": [
+        "Flujo registro, login, forgot, reset y login con la nueva contraseña verificado",
+        "Token caducado (30 minutos) y reutilizado devuelven error",
+        "Un user no puede obtener rol admin ni acceder a lo exclusivo de admin",
+        "pytest completo y npm run build en verde",
+        "Informe en reports/auth-completo/qa-QA-002.md"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "R-01",
+      "description": "Añadir el rol a la tabla users existente: create_all no altera tablas y no hay migraciones (ADR-005); la BD local api/data/app.db ya tiene usuarios.",
+      "probability": "high",
+      "impact": "high",
+      "mitigation": "ARQ-003 decide la estrategia y OPS-003 la implementa antes de API-002; nada de borrar o recrear la BD sin confirmación del usuario."
+    },
+    {
+      "id": "R-02",
+      "description": "Escalada de privilegios: si el registro público admite elegir el rol, cualquiera se hace admin.",
+      "probability": "med",
+      "impact": "high",
+      "mitigation": "El contrato prohíbe aceptar el rol en el payload de registro; QA-002 lo verifica."
+    },
+    {
+      "id": "R-03",
+      "description": "Seguridad del reseteo: token adivinable o reutilizable, enumeración de cuentas por la respuesta o el tiempo, y enlace en log activo fuera de desarrollo.",
+      "probability": "med",
+      "impact": "high",
+      "mitigation": "Contrato con token aleatorio hasheado, un solo uso y respuesta uniforme; el log del enlace solo en modo debug; QA lo verifica."
+    },
+    {
+      "id": "R-04",
+      "description": "Los refresh tokens son stateless (ADR-003): tras resetear la contraseña los tokens emitidos siguen siendo válidos.",
+      "probability": "high",
+      "impact": "med",
+      "mitigation": "ARQ-003 resuelve ADR-003 o documenta la limitación aceptada."
+    },
+    {
+      "id": "R-05",
+      "description": "Sin rate limiting en login y forgot-password: fuerza bruta y abuso del envío.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "ARQ-003 registra la decisión; si se difiere, queda en backlog."
+    },
+    {
+      "id": "R-06",
+      "description": "Conflicto de ficheros con EP-01 (schemas.py, security.py, config.py, requirements.txt) y dependencia de pytest.",
+      "probability": "high",
+      "impact": "med",
+      "mitigation": "EP-02 empieza tras cerrar EP-01 y todo se ejecuta en serie sobre un único árbol de trabajo."
+    },
+    {
+      "id": "R-07",
+      "description": "SSR de Angular: ADR-002 y ADR-006 sin resolver; almacenamiento de tokens sin navegador y prerender de rutas privadas o con token en la URL.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "ARQ-004 los resuelve antes de WEB-001."
+    },
+    {
+      "id": "R-08",
+      "description": "Node 20 por defecto en la terminal: Angular 22 exige Node 22.22 o superior.",
+      "probability": "med",
+      "impact": "low",
+      "mitigation": "nvm use 26.0.0 en la terminal antes de cualquier comando npm (preflight del PM)."
+    },
+    {
+      "id": "R-09",
+      "description": "Cambio ajeno en web/angular.json (analytics del CLI de Angular con un identificador personal) en el árbol de trabajo.",
+      "probability": "high",
+      "impact": "low",
+      "mitigation": "Resuelto: el usuario lo gestionó y lo commiteó (2026-11-11)."
+    },
+    {
+      "id": "R-10",
+      "description": "La migración de users (role, token_version) se aplica sola en el primer arranque real de la API sobre api/data/app.db; el servidor del usuario (python main.py con reload) la ejecutaría en cuanto OPS-003 modifique database.py.",
+      "probability": "high",
+      "impact": "med",
+      "mitigation": "Parada del PM antes de OPS-003: el usuario copia api/data/app.db y decide si para su servidor; los agentes solo usan BD temporales; el ALTER es aditivo e idempotente y conserva las filas."
+    },
+    {
+      "id": "R-11",
+      "description": "INITIAL_ADMIN_PASSWORD en api/.env o en el entorno es un secreto en claro.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "SecretStr y hide_input_in_errors; retirar la variable tras el primer arranque; .env nunca se commitea."
+    },
+    {
+      "id": "R-12",
+      "description": "El mini-migrador no cubre borrados, renombrados ni cambios de tipo.",
+      "probability": "med",
+      "impact": "low",
+      "mitigation": "ADR-005 fija los criterios de paso a Alembic."
+    },
+    {
+      "id": "R-13",
+      "description": "El token de reseteo va en la URL del enlace (Referer, historial y logs del servidor SSR).",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "ARQ-004 decide RenderMode y tratamiento de la ruta /reset-password (ADR-006)."
+    },
+    {
+      "id": "R-14",
+      "description": "El reseteo solo es utilizable con DEBUG=true hasta que exista SMTP; un DEBUG=true en un entorno compartido también escribe enlaces en el log.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "Aceptado para desarrollo local; SMTP y rate limiting quedan en backlog como condición previa a un despliegue no local."
+    },
+    {
+      "id": "R-15",
+      "description": "El refresh token en localStorage o sessionStorage es legible por XSS (ADR-002).",
+      "probability": "low",
+      "impact": "high",
+      "mitigation": "Access token solo en memoria, sin innerHTML ni bypassSecurityTrust*; cookies HttpOnly con BFF en backlog."
+    },
+    {
+      "id": "R-16",
+      "description": "La plantilla de bienvenida de app.html y app.spec.ts rompen todas las rutas hasta limpiarlos.",
+      "probability": "high",
+      "impact": "low",
+      "mitigation": "WEB-001 deja el cascarón solo con router-outlet y reescribe app.spec.ts (contrato §6.1)."
+    },
+    {
+      "id": "R-17",
+      "description": "API-005 cambia el formato aprobado del 422 y toca 3 ficheros de tests de EP-01 (excepción a la propiedad de tests).",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "Ajuste mecánico y acotado en API-005; QA lo revisa en QA-003; el usuario queda avisado del cambio de formato."
+    },
+    {
+      "id": "R-18",
+      "description": "La app es sin zone.js: el estado asíncrono en campos planos no repinta.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "Todo estado asíncrono en signal (contrato §6.1); lo verifican los *.spec.ts y QA-002."
+    }
+  ]
+}

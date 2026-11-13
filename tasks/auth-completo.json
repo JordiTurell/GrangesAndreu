@@ -6,7 +6,7 @@
     "goal": "Que la app tenga login y registro reales (Web contra la API), recuperación de contraseña (forgot/reset) con enlace en modo desarrollo y dos roles globales, admin y user."
   },
   "scope": "both",
-  "mode": "auto",
+  "analysis": "ESTADO (2026-11-13, migración al formato nuevo de AGENTS.md; solo se re-trocea lo pendiente). HECHO: ARQ-003 (contrato API + ADR-003/005/007/011) y ARQ-004 (diseño Angular + ADR-001/002/006) cerrados; contrato 'aprobado' en contracts/auth-completo.md (101 KB, formato antiguo; copia en contracts/auth-completo.old.md); ADR en contracts/adr/. OPS-003 (contracts §2.3: api/app/core/migrations.py, init_db() llama a run_migrations, tests/unit/test_migrations.py) implementada y aprobada por QA, pero SIN commitear (database.py, migrations.py, test_migrations.py y reports/auth-completo/{entrega,qa}-OPS-003.md están en el árbol). API-002 (roles y primer admin) está in_progress con código parcial SIN commitear en api/: entities.py (UserRole, role, token_version, CHECK), schemas.py (UserRead.role, alias NewPassword), services.py (register con rol user fijado, ensure_initial_admin), core/security.py (require_role), core/config.py (INITIAL_ADMIN_* SecretStr, hide_input_in_errors), main.py (lifespan llama a ensure_initial_admin), tests/conftest.py (vacía INITIAL_ADMIN_*), tests/unit/test_roles.py, test_initial_admin.py, test_config.py. Según reports/auth-completo/entrega-API-002.md: tests unitarios en verde y 6 fallos esperados en tests de integración de EP-01 que fijan el conjunto exacto de campos de UserRead y deben incluir 'role' (tests/integration/test_register_password_bytes.py::CAMPOS_USER_READ y test_seguridad_y_contrato.py::test_openapi_user_read_no_expone_hashed_password); sin QA todavía. NO se toca ni descarta ese código. PENDIENTE (contrato antiguo §9 y §9.1): resto de API-002 (ajuste de esos 2 tests, QA, commit), API-004 (claim tv y revocación por token_version, ADR-003), API-003 (forgot/reset-password, entidad PasswordResetToken, shared/mail.py, FRONTEND_BASE_URL, PASSWORD_RESET_EXPIRE_MINUTES, errores invalid/expired_token), API-005 (handler propio del 422 con envelope error.fields sin input, ADR-001, ajuste de 3 tests de integración de EP-01), QA-003 (integración API: roles, primer admin, migración por subproceso, reseteo, revocación, enlace solo en DEBUG, envelope 422), WEB-001 (base de sesión Angular: HttpClient, interceptores, guards, AuthService, TokenStorage, validadores, cascarón app, rutas base; demasiado grande, hay que dividirla), WEB-004 (login real + /inicio privada + cerrar sesión), WEB-002 (registro), WEB-003 (forgot y reset-password, cabeceras de reset en ruta Client), QA-002 (flujo API-Web). Orden previo: API-002 → API-004 → API-003 → API-005 → QA-003 → WEB-001 → WEB-004 → WEB-002 → WEB-003 → QA-002. REUTILIZAR: api/tests/ (conftest con BD temporal; unit/ del Developer, integration/ de QA), módulo auth existente, Settings, shared/exceptions.py; en web/ solo existen login.component y la plantilla de app (Angular 22 sin zone.js, SSR, Tailwind 4, Vitest; sin HttpClient ni rutas). RESTRICCIONES: tareas S (≤ 3 ficheros de producción + tests, ≤ 5 acceptance, spec autosuficiente que no obligue a abrir el contrato); las tareas WEB añaden su ruta en app.routes.ts y app.routes.server.ts a la vez; ningún agente toca api/data/app.db ni .env (R-10); Node 26.0.0 para npm; sin dependencias npm nuevas; API-005 puede ajustar 3 tests de integración de EP-01 (excepción a la propiedad de tests; QA lo revisa en QA-003). DECISIONES PARA EL ARQUITECTO: (a) reducir contracts/auth-completo.md a ≤ ~15 KB en formato nuevo (decisiones, modelo de datos, endpoints/errores y Front necesarios para lo pendiente; sin §OpenAPI, sin criterios de verificación aparte ni replanificación; ADR siguen en contracts/adr/); (b) re-trocear SOLO lo pendiente en tareas S; para API-002 inspeccionar git status/diff de api/ y definir solo la parte que falta sin reescribir lo hecho (p. ej. a quién corresponde el ajuste de los 2 tests de integración con 'role'); (c) partir WEB-001 y las tareas M; (d) decidir si QA-002/QA-003 se parten en varias QA-* S; (e) mantener tareas y ficheros sin solapes innecesarios y grafo acíclico.",
   "assumptions": [
     "EP-01 (base-tests-password) está cerrada (2026-11-11): EP-02 reutiliza api/tests/ y toca los mismos ficheros (schemas.py, security.py, config.py, requirements.txt), siempre tras commit del usuario.",
     "Recuperación de contraseña en modo desarrollo: no se envía correo; el enlace de reseteo se escribe en el log de la API. Debe quedar desactivado fuera de modo debug (el Arquitecto decide el mecanismo). SMTP real queda en backlog.",
@@ -19,7 +19,8 @@
     "Una tarea WEB depende del contrato, no de la implementación de la API, salvo que necesite datos reales.",
     "web/angular.json llevó un cambio ajeno (analytics del CLI de Angular) que el usuario gestionó y commiteó (2026-11-11).",
     "ADR-001 (ARQ-004) cambia el formato aprobado del 422 de la API (de detail por defecto a envelope error.fields sin input) y cierra BUG-004 para el handler: lo implementa API-005. Excepción documentada a la propiedad de tests: API-005 ajusta 3 ficheros de tests de integración de EP-01 (helpers.py, test_register_password_bytes.py, test_seguridad_y_contrato.py) para no dejar pytest en rojo; QA lo revisa en QA-003.",
-    "Supuestos reversibles de ARQ-004 aceptados por el PM (a confirmar por el usuario al cerrar la épica): Recordarme = sesión persistente hasta que caduque el refresh token de 7 días (sin él, sesión de pestaña); destino tras el login /inicio (pantalla privada mínima); login automático tras el registro."
+    "Supuestos reversibles de ARQ-004 aceptados por el PM (a confirmar por el usuario al cerrar la épica): Recordarme = sesión persistente hasta que caduque el refresh token de 7 días (sin él, sesión de pestaña); destino tras el login /inicio (pantalla privada mínima); login automático tras el registro.",
+    "Migración al formato nuevo (2026-11-13): contrato reducido y tareas re-troceadas en tareas S solo para lo pendiente; las tareas ya hechas (ARQ-003, ARQ-004, OPS-003) se conservan como histórico compacto con commit vacío (se cerraron con el formato antiguo y su código/contrato sigue sin commitear). Copias de seguridad: contracts/auth-completo.old.md y tasks/auth-completo.old.json."
   ],
   "out_of_scope": [
     "Envío real de correo (SMTP o proveedor): backlog; en esta épica solo modo desarrollo con log",
@@ -30,7 +31,7 @@
     "Roles por granja y resto de módulos de dominio (pollos, horarios, chat)",
     "Pantalla dashboard y pantallas específicas de admin (solo existe /inicio, una pantalla privada mínima)",
     "Guard por rol en el Front, cookies HttpOnly/BFF, logout en servidor y rotación de refresh tokens (backlog de ADR-002 y ADR-003)",
-    "e2e con Playwright (OPS-004, opcional P2, backlog)"
+    "e2e con Playwright (OPS-004, opcional, backlog)"
   ],
   "artifacts": {
     "contract": "contracts/auth-completo.md",
@@ -93,95 +94,62 @@
       "story": "US-03",
       "layer": "arq",
       "title": "Contrato API de recuperación de contraseña y roles admin/user",
-      "description": "Decidir y documentar en contracts/auth-completo.md y contracts/auth.md: (a) endpoints, esquemas, errores y modelo de datos del reseteo (token hasheado, un solo uso, 30 minutos, respuesta sin enumeración, qué ocurre con tokens previos y con los refresh tokens ya emitidos, ADR-003); (b) mecanismo del modo desarrollo del enlace (log) y cómo se garantiza que no se active fuera de debug, más la URL base del Front; (c) modelo de roles admin y user: columna en users, valor por defecto, qué devuelve /me, dependencia para exigir rol, cómo se crea el primer admin y por qué el registro no admite elegir rol; (d) estrategia para añadir la columna a users con api/data/app.db existente (ADR-005); (e) decisión sobre rate limiting. Resolver o crear los ADR necesarios (ADR-003, ADR-005, ADR-007 reducido, ADR de recuperación). Registrar como pregunta cualquier decisión de negocio. Aprovechar para corregir la cabecera de contracts/auth.md (aun dice pendiente de API-001), la redacción de la sección 7.5 y 8 de contracts/base-tests-password.md sobre el sustituto Unicode aislado (BUG-004) y la de DB-1, DB-3 y FX-C (backlog de EP-01).",
-      "files": [
-        "contracts/auth-completo.md",
-        "contracts/auth.md",
-        "contracts/base-tests-password.md",
-        "contracts/adr/README.md",
-        "contracts/adr/ADR-003-refresh-tokens.md",
-        "contracts/adr/ADR-005-migraciones.md",
-        "contracts/adr/ADR-007-roles.md",
-        "contracts/adr/ADR-011-recuperacion-password.md"
-      ],
-      "owner": "arquitecto",
+      "spec": "Histórico (formato antiguo). Contrato de la API: reseteo de contraseña, roles admin/user, estrategia de migración (ADR-003, ADR-005, ADR-007 reducido, ADR-011).",
+      "files": ["contracts/auth-completo.md", "contracts/auth.md", "contracts/adr/"],
+      "acceptance": [],
+      "contract_refs": [],
       "depends_on": [],
-      "priority": "P0",
       "size": "M",
       "status": "done",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Contrato en estado aprobado con endpoints, esquemas, errores y criterios verificables para Developer y QA",
-        "ADR-003, ADR-005, ADR-007 y el de recuperación aceptados o con pregunta registrada",
-        "Estrategia para añadir la columna de rol a users sin perder datos ni borrar la BD sin confirmación",
-        "contracts/auth.md coherente con el contrato nuevo",
-        "Bloque Resultado con estado ok y sin decisiones de negocio pendientes"
-      ]
+      "bugs": []
     },
     {
       "id": "ARQ-004",
       "story": "US-02",
       "layer": "arq",
       "title": "Diseño Angular de autenticación: rutas, sesión, guards y pantallas",
-      "description": "Decidir y documentar en el contrato: ADR-001 (formato de errores 422 en el Front), ADR-002 (almacenamiento de tokens compatible con SSR y significado de Recordarme), ADR-006 (RenderMode por ruta: privadas, login, registro y reseteo con token en la URL), rutas y guards, AuthService, interceptor de Authorization y de refresco, modelos TS (incluido el rol), tratamiento de las dos formas de error, destino tras login y tras registro, y pantallas de registro, forgot-password y reset-password (componentes y campos).",
-      "files": [
-        "contracts/auth-completo.md",
-        "contracts/auth.md",
-        "contracts/adr/README.md",
-        "contracts/adr/ADR-001-errores-validacion.md",
-        "contracts/adr/ADR-002-tokens-front.md",
-        "contracts/adr/ADR-006-rendermode.md"
-      ],
-      "owner": "arquitecto",
+      "spec": "Histórico (formato antiguo). Diseño del Front: ADR-001 (422), ADR-002 (tokens), ADR-006 (RenderMode), rutas, guards, AuthService, interceptores, modelos y pantallas.",
+      "files": ["contracts/auth-completo.md", "contracts/auth.md", "contracts/adr/"],
+      "acceptance": [],
+      "contract_refs": [],
       "depends_on": ["ARQ-003"],
-      "priority": "P0",
       "size": "M",
       "status": "done",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Diseño Angular aprobado con rutas, servicios, interceptor, guards y modelos TS",
-        "ADR-001, ADR-002 y ADR-006 aceptados",
-        "Criterios verificables para Developer y QA",
-        "Bloque Resultado con estado ok y sin decisiones de negocio pendientes"
-      ]
+      "bugs": []
     },
     {
       "id": "OPS-003",
       "story": "US-04",
       "layer": "ops",
       "title": "Migraciones mínimas: añadir role y token_version a users sin perder datos (ADR-005)",
-      "description": "Implementar §2.3 del contrato: api/app/core/migrations.py con run_migrations y pasos aditivos idempotentes por inspección del esquema, invocado desde init_db() tras create_all, y api/tests/unit/test_migrations.py (criterios MG-xx de §7.2) con una BD anterior creada con el DDL congelado y dos usuarios sembrados y con una BD nueva. No toca requirements.txt. Ningún agente abre ni migra api/data/app.db; el usuario debe copiarlo antes de arrancar su API tras integrar el cambio (R-10).",
+      "spec": "Histórico (aprobada por QA con el formato antiguo; código SIN commitear). api/app/core/migrations.py con run_migrations (pasos aditivos idempotentes por inspección del esquema) llamado desde init_db() tras create_all; tests en api/tests/unit/test_migrations.py.",
       "files": [
         "api/app/core/migrations.py",
         "api/app/core/database.py",
         "api/tests/unit/test_migrations.py"
       ],
-      "owner": "developer",
+      "acceptance": [],
+      "contract_refs": [],
       "depends_on": ["ARQ-003"],
-      "priority": "P0",
       "size": "S",
-      "status": "todo",
+      "status": "done",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Una BD con la tabla users anterior se actualiza sin perder usuarios y los existentes quedan con role user y token_version 0",
-        "Una BD nueva se crea con el esquema completo y la migración no hace nada; la migración es idempotente",
-        "Pasa antes y después de API-002 (entidad sin y con las columnas)",
-        "No se toca api/.env, requirements.txt ni api/data/app.db",
-        "Entrega documentada en reports/auth-completo/entrega-OPS-003.md, con la versión de sqlite3.sqlite_version"
-      ]
+      "bugs": []
     },
     {
       "id": "API-002",
       "story": "US-04",
       "layer": "api",
       "title": "Roles admin y user y primer admin por variables de entorno",
-      "description": "Implementar según contrato (§2.1, §3, §4.1, §4.4, §4.5, §7.1 y §7.3): UserRole, columnas role y token_version con CHECK en la entidad, UserRead.role, register con rol user fijado por el servicio e ignorando cualquier role del body, dependencia require_role (403 forbidden), INITIAL_ADMIN_* en Settings con SecretStr y hide_input_in_errors, ensure_initial_admin idempotente llamado en el lifespan. controllers.py no cambia. Incluye tests unitarios del Developer.",
+      "spec": "EL CÓDIGO YA EXISTE EN EL ÁRBOL (sin commitear): NO reescribirlo ni descartarlo. Ya hecho: UserRole, columnas role y token_version con CHECK ck_users_role (entities.py); UserRead.role y alias NewPassword (schemas.py); register_user con role=user fijado y ensure_initial_admin (services.py); require_role(*roles) (core/security.py); INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_USERNAME e INITIAL_ADMIN_PASSWORD (SecretStr) y hide_input_in_errors (core/config.py); lifespan que llama a ensure_initial_admin tras init_db() (main.py); conftest que vacía INITIAL_ADMIN_*; tests unitarios test_roles.py, test_initial_admin.py y test_config.py. LO QUE FALTA: (1) EXCEPCIÓN documentada a la propiedad de tests (los escribe QA): añadir «role» al conjunto EXACTO de campos de UserRead en dos tests de integración de EP-01, que hoy fallan (6 casos): tests/integration/test_register_password_bytes.py (constante CAMPOS_USER_READ, línea ~20) y tests/integration/test_seguridad_y_contrato.py (test_openapi_user_read_no_expone_hashed_password, línea ~152); el conjunto pasa a {id, username, email, is_active, role, created_at}. No tocar nada más de esos dos ficheros (API-005 y API-008 los vuelven a tocar). (2) Ejecutar los tests de la tarea y la suite completa y escribir la entrega. (3) Si la verificación destapa un hueco frente a lo descrito arriba, corregirlo en el fichero afectado y anotarlo en la entrega. PRECONDICIÓN DE GIT: OPS-003 (api/app/core/database.py, api/app/core/migrations.py, api/tests/unit/test_migrations.py y sus informes, ya aprobada por QA) sigue sin commitear en el árbol y NO son ficheros de esta tarea: el PM debe ordenar su commit antes del de API-002. Nadie toca api/data/app.db ni .env.",
       "files": [
         "api/app/modules/auth/entities.py",
         "api/app/modules/auth/schemas.py",
@@ -192,298 +160,750 @@
         "api/tests/conftest.py",
         "api/tests/unit/test_roles.py",
         "api/tests/unit/test_initial_admin.py",
-        "api/tests/unit/test_config.py"
+        "api/tests/unit/test_config.py",
+        "api/tests/integration/test_register_password_bytes.py",
+        "api/tests/integration/test_seguridad_y_contrato.py"
       ],
-      "owner": "developer",
+      "acceptance": [
+        "cd api; python -m pytest tests/integration/test_register_password_bytes.py tests/integration/test_seguridad_y_contrato.py en verde (los 6 fallos de la entrega pasan) y python -m pytest completo en verde",
+        "POST /api/auth/register con un body que incluye role admin devuelve 201 con role user; /openapi.json: UserRead con role requerido y sin token_version ni hashed_password, y UserCreate sin role",
+        "require_role (ruta montada por el test): sin token 401, user 403 forbidden sin WWW-Authenticate, admin 200",
+        "ensure_initial_admin es idempotente (created, luego unchanged; promoted solo cambia role) y la contraseña no aparece en logs ni en mensajes de error (tests unitarios existentes en verde)",
+        "git status solo muestra los files de esta tarea más los de OPS-003 (que el PM commitea antes); api/data/app.db intacto"
+      ],
+      "contract_refs": [],
       "depends_on": ["ARQ-003", "OPS-003"],
-      "priority": "P0",
-      "size": "M",
-      "status": "todo",
+      "size": "S",
+      "status": "in_progress",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "register crea siempre rol user aunque el body lleve role admin",
-        "GET /api/auth/me y UserRead devuelven el rol",
-        "La dependencia de rol responde 403 a un user y 401 sin token (probada con una ruta de prueba montada por el test)",
-        "El primer admin se crea o promueve de forma idempotente con INITIAL_ADMIN_* y la contraseña no sale en logs ni errores",
-        "Tests unitarios en verde con pytest (los 189 existentes siguen en verde)",
-        "Entrega documentada en reports/auth-completo/entrega-API-002.md"
-      ]
+      "bugs": []
     },
     {
       "id": "API-004",
       "story": "US-03",
       "layer": "api",
-      "title": "Revocación de tokens por token_version (ADR-003)",
-      "description": "Implementar según contrato (§3 login/refresh, §4.4 y ADR-003): claim tv en los access y refresh tokens, comprobación en get_current_user y refresh_tokens (401 Token revocado cuando tv no coincide con user.token_version; tokens sin tv valen con version 0). Incluye tests unitarios del Developer.",
+      "title": "Revocación de tokens por token_version (claim tv, ADR-003)",
+      "spec": "En api/app/core/security.py: _create_token acepta token_version y añade el claim entero 'tv'; create_access_token(subject, token_version: int = 0) y create_refresh_token(subject, token_version: int = 0) lo pasan. Añadir ensure_token_is_current(payload: dict, user) -> None: si payload.get('tv', 0) != user.token_version lanza AuthenticationError('Token revocado') (401 unauthorized con ese mensaje exacto). get_current_user la llama después de comprobar que el usuario existe y está activo. En api/app/modules/auth/services.py: build_tokens(user) pasa user.token_version a ambos create_*; refresh_tokens llama a ensure_token_is_current(payload, user) tras comprobar usuario activo y devuelve un par nuevo con el tv actual. Un token sin 'tv' vale mientras user.token_version == 0. Un refresh normal NO invalida el refresh anterior (limitación aceptada de ADR-003). No tocar controllers.py ni schemas.py (tv es interno: nunca aparece en respuestas). Tests en tests/unit/test_token_revocation.py con la fixture db_session y llamadas directas a decode_token, get_current_user y refresh_tokens (sin TestClient; el nivel integración es de QA-005).",
       "files": [
         "api/app/core/security.py",
         "api/app/modules/auth/services.py",
         "api/tests/unit/test_token_revocation.py"
       ],
-      "owner": "developer",
+      "acceptance": [
+        "Los tokens de build_tokens llevan tv == user.token_version (0 y, tras incrementarlo en BD, 1)",
+        "Con token_version incrementado en BD, get_current_user con el access antiguo y refresh_tokens con el refresh antiguo lanzan AuthenticationError con mensaje Token revocado; con tokens nuevos funcionan",
+        "Un token fabricado sin tv es válido con token_version 0 y queda revocado con token_version 1",
+        "refresh_tokens con un refresh vigente devuelve un par nuevo y el refresh anterior sigue sirviendo",
+        "cd api; python -m pytest tests/unit/test_token_revocation.py tests/unit/test_roles.py en verde"
+      ],
+      "contract_refs": ["§3.3"],
       "depends_on": ["API-002"],
-      "priority": "P0",
       "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Un token con tv distinto de user.token_version da 401 Token revocado en /me y en refresh",
-        "Los tokens sin tv siguen valiendo con token_version 0",
-        "Un refresh normal devuelve un par nuevo sin invalidar el anterior (limitación aceptada)",
-        "Tests unitarios en verde con pytest",
-        "Entrega documentada en reports/auth-completo/entrega-API-004.md"
-      ]
-    },
-    {
-      "id": "API-003",
-      "story": "US-03",
-      "layer": "api",
-      "title": "Forgot-password y reset-password en la API (modo desarrollo)",
-      "description": "Implementar según contrato (§2.2, §3, §4.1 a §4.4, §7.4 y §7.5): entidad PasswordResetToken, esquemas, FRONTEND_BASE_URL y PASSWORD_RESET_EXPIRE_MINUTES, shared/mail.py (enlace en el log solo con DEBUG=true), errores InvalidTokenError y ExpiredTokenError, forgot-password con 202 uniforme y trabajo en segundo plano, y reset-password con consumo atómico, validación idéntica a register (ADR-004) e incremento de token_version. database.py no cambia. Incluye tests unitarios del Developer.",
-      "files": [
-        "api/app/modules/auth/entities.py",
-        "api/app/modules/auth/schemas.py",
-        "api/app/modules/auth/services.py",
-        "api/app/modules/auth/controllers.py",
-        "api/app/core/config.py",
-        "api/app/shared/mail.py",
-        "api/app/shared/exceptions.py",
-        "api/tests/unit/test_password_reset.py",
-        "api/tests/unit/test_mail.py"
-      ],
-      "owner": "developer",
-      "depends_on": ["ARQ-003", "API-002", "API-004"],
-      "priority": "P0",
-      "size": "M",
-      "status": "todo",
-      "attempts": 0,
-      "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "La solicitud responde 202 idéntico exista o no el email y en modo desarrollo escribe el enlace en el log",
-        "El token expira a los 30 minutos, solo sirve una vez, no se guarda en claro y el último pedido invalida los anteriores",
-        "El reseteo cambia la contraseña, la nueva se valida igual que en register y los tokens emitidos dejan de valer",
-        "Fuera de modo debug no se escribe el enlace en el log",
-        "Tests unitarios en verde con pytest",
-        "Entrega documentada en reports/auth-completo/entrega-API-003.md"
-      ]
+      "bugs": []
     },
     {
       "id": "API-005",
       "story": "US-02",
       "layer": "api",
-      "title": "Handler propio del 422 con envelope sin input (ADR-001)",
-      "description": "Implementar según contrato (§3 Formato del 422, §5 y §7.8, ADR-001): api/app/shared/validation.py con el envelope error.fields sin input y con saneado de cadenas (cierra BUG-004 para el handler), registro del handler en exceptions.py, responses 422 con ValidationErrorResponse en las 5 operaciones con cuerpo de controllers.py, y tests unitarios VE-06, VE-08 y VE-09. Incluye el ajuste mecánico de 3 ficheros de tests de integración de EP-01 (excepción documentada a la propiedad de tests; QA lo revisa en QA-003) para no dejar pytest en rojo.",
+      "title": "Handler propio del 422 con envelope sin input (ADR-001, cierra BUG-004)",
+      "spec": "Nuevo api/app/shared/validation.py con: modelos Pydantic solo para OpenAPI ValidationFieldError {loc: list[str | int], code: str, message: str, ctx: dict | None = None}, ValidationErrorBody {code: str = 'validation_error', message: str, fields: list[ValidationFieldError]} y ValidationErrorResponse {error: ValidationErrorBody}; y validation_error_response(exc: RequestValidationError) -> JSONResponse (status 422) con cuerpo {error: {code: 'validation_error', message: 'Los datos enviados no son válidos', fields: [...]}}. Cada fields[i] sale de exc.errors(): loc (cada elemento str saneado), code = type, message = msg saneado, ctx solo si no queda vacío (únicamente valores str, int, float, bool o None; nunca la clave 'error'). NUNCA input, url ni objetos de error. Saneado de toda cadena emitida: s.encode('utf-8', 'replace').decode('utf-8') (un sustituto Unicode aislado como el escape JSON ud800 no debe producir 500: BUG-004). Si el último elemento de loc es password, new_password, token o refresh_token (campo sensible), message solo es el de Pydantic cuando code está en {missing, string_type, string_too_short, string_too_long, password_too_long}; en otro caso es 'Valor no válido'. En api/app/shared/exceptions.py, register_exception_handlers registra además @app.exception_handler(RequestValidationError) → validation_error_response (vale también para cualquier FastAPI() de test que llame a register_exception_handlers). 404/405/500 y errores de dominio NO cambian. No tocar controllers.py (la declaración en OpenAPI es API-008). AJUSTE MECÁNICO DE EP-01 (excepción documentada a la propiedad de tests; QA lo revisa en QA-005), equivalencias detail[0].type → error.fields[0].code, msg → message, loc → loc, ctx → ctx: api/tests/integration/helpers.py (comprobar_422_password lee respuesta.json()['error']['fields'][0] y comprueba loc, code y, para password_too_long, '72 bytes' en message) y api/tests/integration/test_register_password_bytes.py (los usos de ['detail'][0]: la tupla campos ('type','loc','msg') pasa a ('code','loc','message') y el segundo uso pasa a error.fields[0] con code y loc). No tocar test_seguridad_y_contrato.py (lo ajusta API-008). Tests nuevos en tests/unit/test_validation_errors.py: ValueError de un validador sin 'error' en ctx; validation_error_response con un RequestValidationError fabricado (input binario, objeto no JSON, sustitutos en msg y en loc) serializable a UTF-8 con cadenas saneadas; FastAPI() de test con register_exception_handlers y una ruta con cuerpo devuelve el mismo envelope.",
       "files": [
         "api/app/shared/validation.py",
         "api/app/shared/exceptions.py",
-        "api/app/modules/auth/controllers.py",
         "api/tests/unit/test_validation_errors.py",
         "api/tests/integration/helpers.py",
-        "api/tests/integration/test_register_password_bytes.py",
-        "api/tests/integration/test_seguridad_y_contrato.py"
+        "api/tests/integration/test_register_password_bytes.py"
       ],
-      "owner": "developer",
-      "depends_on": ["ARQ-004", "API-003"],
-      "priority": "P0",
+      "acceptance": [
+        "register con contraseña de 73 bytes devuelve 422 con error.code validation_error y error.fields[0] igual a {loc: [body, password], code: password_too_long, message: La contraseña no puede superar los 72 bytes en UTF-8, ctx: {max_bytes: 72}}, sin clave detail",
+        "Ningún 422 de register, login ni refresh contiene la clave input ni el valor enviado de password (cadena de prueba única en response.text)",
+        "validation_error_response con sustitutos aislados en msg y loc e input binario devuelve JSON serializable a UTF-8 y ctx solo con escalares (tests unitarios)",
+        "404/405 y los errores de dominio no cambian: tests/integration/test_auth_regresion.py y test_login_password_bytes.py en verde",
+        "cd api; python -m pytest completo en verde con helpers.py y test_register_password_bytes.py ajustados"
+      ],
+      "contract_refs": ["§3.5"],
+      "depends_on": ["API-002"],
       "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Los 422 de register, login, refresh, forgot-password y reset-password devuelven error.code validation_error con fields sin input ni el valor enviado de password, new_password o token",
-        "Un sustituto Unicode aislado en el cuerpo no produce 500 (BUG-004)",
-        "Los 404, 405 y los errores de dominio no cambian",
-        "/openapi.json declara 422 con ValidationErrorResponse en las 5 operaciones",
-        "pytest completo en verde con los 3 ficheros de EP-01 ajustados y los tests unitarios nuevos",
-        "Entrega documentada en reports/auth-completo/entrega-API-005.md"
-      ]
+      "bugs": []
+    },
+    {
+      "id": "API-003",
+      "story": "US-03",
+      "layer": "api",
+      "title": "Infraestructura de recuperación de contraseña: configuración, envío en modo desarrollo y errores de token",
+      "spec": "(a) api/app/core/config.py: nuevos campos de Settings frontend_base_url: str = 'http://localhost:4200' con field_validator (debe empezar por http:// o https://, si no ValueError('FRONTEND_BASE_URL debe empezar por http:// o https://'); se le quita la / final) y password_reset_expire_minutes: int = Field(30, gt=0, le=1440). (b) api/app/shared/exceptions.py: InvalidTokenError(AppError) con status_code 400 y code 'invalid_token'; ExpiredTokenError(AppError) con 400 y 'expired_token' (el handler de AppError existente ya los traduce a {error: {code, message}}). (c) Nuevo api/app/shared/mail.py: class MailSender(Protocol) con send_password_reset(self, to_email: str, reset_url: str) -> None; class LogMailSender (escribe UNA línea INFO en el logger 'app.mail': '[DEV] Recuperación de contraseña para <email>: <reset_url>'; vuelve a comprobar settings.debug y no emite nada si es falso); class NullMailSender (no hace nada); get_mail_sender() -> MailSender devuelve LogMailSender solo si settings.debug is True y NullMailSender en otro caso, evaluado en CADA llamada (sin cachear ni decidir al importar, para poder alternar settings.debug con monkeypatch); build_password_reset_url(token: str) -> str = f'{settings.frontend_base_url}/reset-password?token={token}'. El módulo configura el logger 'app.mail' (nivel INFO y un StreamHandler a stderr si no tiene manejadores, propagate activo) porque uvicorn solo configura sus propios loggers. Fuera de DEBUG=true no se escribe ningún enlace en el log. Tests: tests/unit/test_mail.py (get_mail_sender, LogMailSender con caplog, NullMailSender, build_password_reset_url, atributos de las dos excepciones) y ampliar tests/unit/test_config.py (defaults, validación de FRONTEND_BASE_URL y del rango de minutos; el fixture entorno_limpio debe limpiar también FRONTEND_BASE_URL y PASSWORD_RESET_EXPIRE_MINUTES). No añadir variables a api/.env.",
+      "files": [
+        "api/app/core/config.py",
+        "api/app/shared/exceptions.py",
+        "api/app/shared/mail.py",
+        "api/tests/unit/test_mail.py",
+        "api/tests/unit/test_config.py"
+      ],
+      "acceptance": [
+        "get_mail_sender() devuelve LogMailSender con settings.debug True y NullMailSender con False, alternando con monkeypatch en la misma ejecución",
+        "LogMailSender.send_password_reset emite exactamente 1 registro INFO del logger app.mail con el texto [DEV] Recuperación de contraseña para <email>: <url>; con debug False y con NullMailSender no emiten nada",
+        "build_password_reset_url('t') == '<frontend_base_url>/reset-password?token=t'; FRONTEND_BASE_URL='https://app.example.com/' no produce doble barra; 'ftp://x' lanza ValidationError de Settings",
+        "password_reset_expire_minutes vale 30 por defecto; 0 y 1441 lanzan ValidationError",
+        "InvalidTokenError y ExpiredTokenError tienen status_code 400 y codes invalid_token y expired_token; cd api; python -m pytest tests/unit/test_mail.py tests/unit/test_config.py en verde"
+      ],
+      "contract_refs": ["§4.1", "§4.3"],
+      "depends_on": ["API-005", "API-004"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "API-006",
+      "story": "US-03",
+      "layer": "api",
+      "title": "Entidad PasswordResetToken, esquemas y lógica de solicitud de recuperación",
+      "spec": "(a) api/app/modules/auth/entities.py: entidad PasswordResetToken (__tablename__ 'password_reset_tokens'): id Integer PK autoincremental; user_id Integer NOT NULL ForeignKey('users.id', ondelete='CASCADE') con index; token_hash String(64) NOT NULL unique (index de búsqueda); created_at DateTime(timezone=True) NOT NULL default UTC actual; expires_at DateTime(timezone=True) NOT NULL; used_at DateTime(timezone=True) NULL. init_db() ya importa entities: create_all la crea y database.py NO cambia. SQLite devuelve las fechas sin zona: al compararlas en Python tratarlas como UTC. (b) api/app/modules/auth/schemas.py: ForgotPasswordRequest {email: EmailStr}; ResetPasswordRequest {token: str con min_length=1 y max_length=256; new_password: NewPassword (el alias ya existe)}; MessageResponse {message: str}. (c) api/app/modules/auth/services.py: FORGOT_PASSWORD_MESSAGE = 'Si el email está registrado, recibirás un enlace para restablecer la contraseña.'; hash_reset_token(token) -> hashlib.sha256(token.encode('utf-8')).hexdigest(); create_password_reset(db, email, *, now=None) -> None: busca al usuario con get_user_by_email (sin distinguir mayúsculas); si no existe o está inactivo termina sin hacer nada; si no, BORRA todos los tokens del usuario (el último pedido invalida los anteriores), genera token = secrets.token_urlsafe(32), inserta la fila con token_hash=hash_reset_token(token), created_at=now y expires_at=now + timedelta(minutes=settings.password_reset_expire_minutes) (now por defecto datetime.now(timezone.utc)), hace commit y SOLO DESPUÉS llama a mail.get_mail_sender().send_password_reset(user.email, mail.build_password_reset_url(token)); importar el MÓDULO (from app.shared import mail) para que los tests puedan sustituirlo con monkeypatch. process_forgot_password(bind, email) -> None: abre Session(bind=bind, expire_on_commit=False), llama a create_password_reset, captura cualquier Exception y la registra con logger.error usando solo type(exc).__name__ (sin mensaje, token ni email) sin propagarla. El token nunca se guarda en claro ni se devuelve. Tests en tests/unit/test_forgot_password.py con db_session/engine y un espía en mail.get_mail_sender.",
+      "files": [
+        "api/app/modules/auth/entities.py",
+        "api/app/modules/auth/schemas.py",
+        "api/app/modules/auth/services.py",
+        "api/tests/unit/test_forgot_password.py"
+      ],
+      "acceptance": [
+        "Usuario activo: 1 fila con token_hash de 64 hex, used_at None y expires_at - created_at == 30 min; el token entregado al sender cumple sha256(token) == token_hash, token != token_hash, 43 caracteres [A-Za-z0-9_-]",
+        "Email inexistente o de usuario inactivo: 0 filas y el sender no se llama; el mismo email en mayúsculas encuentra al usuario",
+        "Segunda solicitud del mismo usuario: sigue habiendo 1 fila y el hash cambia",
+        "process_forgot_password con create_password_reset lanzando RuntimeError no propaga y caplog solo contiene RuntimeError (sin email ni token)",
+        "Borrar el usuario borra sus tokens (FK CASCADE); cd api; python -m pytest tests/unit/test_forgot_password.py y la suite tests/unit en verde"
+      ],
+      "contract_refs": ["§2.2", "§3.1"],
+      "depends_on": ["API-003"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "API-007",
+      "story": "US-03",
+      "layer": "api",
+      "title": "Reseteo de contraseña y endpoints forgot-password y reset-password",
+      "spec": "(a) api/app/modules/auth/services.py: reset_password(db, token, new_password, *, now=None) -> None, en UNA transacción: 1) h = hash_reset_token(token); buscar la fila de PasswordResetToken por token_hash; no existe o used_at no es nulo → InvalidTokenError('El enlace de recuperación no es válido o ya se ha utilizado'); expires_at (si tzinfo es None, tratarlo como UTC) <= now → ExpiredTokenError('El enlace de recuperación ha caducado') (el instante exacto de caducidad ya es caducado); usuario inexistente o inactivo → InvalidTokenError con el mismo mensaje. 2) consumo atómico: UPDATE password_reset_tokens SET used_at = :now WHERE id = :id AND used_at IS NULL AND expires_at > :now; si rowcount != 1 → rollback e InvalidTokenError (garantiza un solo uso con peticiones concurrentes). 3) user.hashed_password = hash_password(new_password) y user.token_version = User.token_version + 1 (incremento en SQL; revoca todos los tokens emitidos, ADR-003); commit. La fila consumida no se borra. (b) api/app/modules/auth/controllers.py (el router ya está registrado en main.py): POST /forgot-password (público) con body ForgotPasswordRequest, response_model=MessageResponse y status 202: recibe BackgroundTasks y db: Session = Depends(get_db), añade background_tasks.add_task(services.process_forgot_password, db.get_bind(), str(payload.email)) y devuelve MessageResponse(message=services.FORGOT_PASSWORD_MESSAGE) SIN consultar la BD (respuesta idéntica exista o no el email). POST /reset-password (público) con body ResetPasswordRequest y response_model=MessageResponse (200) → {message: 'Contraseña actualizada. Ya puedes iniciar sesión.'}; no inicia sesión ni devuelve tokens. Los 400 salen del handler de AppError. La validación del esquema ocurre antes de tocar el token: una contraseña inválida (menos de 8 caracteres o más de 72 bytes, ADR-004) da 422 y NO consume el token. La declaración del 422 en OpenAPI es de API-008. Tests en tests/unit/test_reset_password.py: reset_password con now=; y un smoke de endpoints con la fixture client (el token se obtiene con un espía sobre mail.get_mail_sender).",
+      "files": [
+        "api/app/modules/auth/services.py",
+        "api/app/modules/auth/controllers.py",
+        "api/tests/unit/test_reset_password.py"
+      ],
+      "acceptance": [
+        "Reseteo feliz: la contraseña nueva verifica con verify_password y la antigua no, used_at queda relleno y token_version sube en 1; repetir con el mismo token lanza InvalidTokenError y la contraseña no cambia",
+        "Con now=: creación + 29 min 59 s es válido y creación + 30 min exactos lanza ExpiredTokenError; token inexistente o alterado y usuario desactivado tras pedir el enlace lanzan InvalidTokenError",
+        "Carrera: la sesión 1 lee la fila, la 2 consume el token y la 1 intenta consumirlo → InvalidTokenError y token_version solo sube una vez",
+        "Endpoints (client): forgot responde 202 con el message exacto y cuerpo idéntico para email existente e inexistente; reset responde 200 y 400 invalid_token con el token reutilizado; new_password de 7 caracteres o de 73 bytes da 422 y el token sigue sirviendo después",
+        "cd api; python -m pytest tests/unit/test_reset_password.py y la suite tests/unit en verde"
+      ],
+      "contract_refs": ["§3.1", "§3.2"],
+      "depends_on": ["API-006"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "API-008",
+      "story": "US-01",
+      "layer": "api",
+      "title": "Declarar el 422 con ValidationErrorResponse en las 5 operaciones con cuerpo (OpenAPI)",
+      "spec": "En api/app/modules/auth/controllers.py, añadir a las 5 operaciones con cuerpo (register, login, refresh, forgot-password y reset-password) responses={422: {'model': ValidationErrorResponse, 'description': 'Error de validación'}} importando ValidationErrorResponse de app.shared.validation. Así /openapi.json declara 422 → ValidationErrorResponse en ellas, desaparecen HTTPValidationError y ValidationError de components.schemas y /me (y /health) siguen sin 422. Ajuste mecánico de EP-01 (excepción documentada a la propiedad de tests; QA lo revisa en QA-005): en api/tests/integration/test_seguridad_y_contrato.py, test_openapi_rutas_de_register_y_login espera ahora el $ref '#/components/schemas/ValidationErrorResponse' para el 422 (en vez de HTTPValidationError); no tocar nada más de ese fichero. Test nuevo del Developer en tests/unit/test_openapi_422.py usando main.app.openapi() (sin TestClient): las 5 rutas declaran 422 → ValidationErrorResponse, HTTPValidationError y ValidationError no existen, /me no declara 422 y ningún esquema de components tiene una propiedad llamada input.",
+      "files": [
+        "api/app/modules/auth/controllers.py",
+        "api/tests/unit/test_openapi_422.py",
+        "api/tests/integration/test_seguridad_y_contrato.py"
+      ],
+      "acceptance": [
+        "main.app.openapi(): las 5 operaciones con cuerpo declaran 422 con $ref a ValidationErrorResponse",
+        "HTTPValidationError y ValidationError no están en components.schemas y ningún esquema tiene propiedad input; /me no declara 422",
+        "UserCreate.password sigue con minLength 8, sin maxLength y con 72 bytes en la descripción (los tests existentes de test_seguridad_y_contrato.py lo comprueban)",
+        "cd api; python -m pytest completo en verde con test_seguridad_y_contrato.py ajustado"
+      ],
+      "contract_refs": ["§3.5"],
+      "depends_on": ["API-007", "API-005"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
     },
     {
       "id": "QA-003",
-      "story": "US-03",
+      "story": "US-04",
       "layer": "qa",
-      "title": "Integración de la API: roles, primer admin, migración y recuperación de contraseña",
-      "description": "Escribir y ejecutar los tests de integración de API del contrato (§7): roles y require_role, registro que no permite admin, primer admin idempotente, migración de una BD anterior mediante init_db en subproceso sobre copia temporal, forgot/reset (feliz, caducado simulando el tiempo, reutilizado, inválido, respuesta uniforme, sin enumeración), revocación de tokens, enlace solo en DEBUG y ausencia de token y hashes en respuestas y logs, el envelope del 422 (VE-01 a VE-05, VE-07 y VE-10 de §7.8) y la revisión del ajuste de los 3 ficheros de tests de EP-01 hecho por API-005. Sin tocar api/data/app.db.",
+      "title": "Integración de la API: roles, primer admin y migración por subproceso",
+      "spec": "Escribir tests de integración de QA con TestClient y las fixtures client, engine y db_session de api/tests/conftest.py (BD temporal; nunca api/data/app.db). (1) tests/integration/test_roles.py: register válido → 201 con role user y sin hashed_password ni token_version; body con role admin, Role, is_admin true e is_active false → 201 con role user e is_active true y la fila es user; el primer usuario de una BD vacía es user; /openapi.json sin role ni is_active en UserCreate; GET /me devuelve el role de la BD (user y admin sembrado con db_session). Ruta de prueba solo-admin (patrón P-1): el test crea su propia FastAPI(), llama a register_exception_handlers(app), monta el router de auth, añade app.add_api_route('/solo-admin', lambda: {'ok': True}, dependencies=[Depends(require_role(UserRole.ADMIN))]) y sobrescribe get_db con la sesión de engine: sin token 401 con WWW-Authenticate; user 403 con body {error: {code: forbidden, message: No tienes permisos para realizar esta acción}} y sin WWW-Authenticate; admin 200; admin inactivo 401; cambiar el rol en BD de user a admin con el MISMO access token pasa de 403 a 200 y el JWT no contiene role. (2) tests/integration/test_initial_admin.py: ensure_initial_admin(db_session, email=..., username=..., password=...) → created, luego login 200 y /me con role admin; segunda llamada unchanged (un solo usuario, mismo hash); promoted conserva la contraseña anterior y no aplica la de la variable; con otro admin existente no promueve; username de otro usuario → RuntimeError sin la contraseña en el mensaje. (3) tests/integration/test_migration_init_db.py (subproceso): con DATABASE_URL a un fichero temporal, DEBUG=true, SECRET_KEY de prueba y cwd = api/, crear una BD anterior con este DDL: CREATE TABLE users (id INTEGER NOT NULL, username VARCHAR(80) NOT NULL, email VARCHAR(120) NOT NULL, hashed_password VARCHAR(255) NOT NULL, is_active BOOLEAN NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id)); CREATE UNIQUE INDEX ix_users_username ON users (username); CREATE UNIQUE INDEX ix_users_email ON users (email); con 2 usuarios (uno con hash bcrypt real); ejecutar un subproceso python que importe app.core.database y llame a init_db(); comprobar salida 0, mismas filas, role user y token_version 0 en ambos, verify_password sobre el hash conservado, que un UPDATE con role root falla por el CHECK, y que una segunda ejecución no cambia nada. Informe en reports/auth-completo/qa-QA-003.md (≤ 1 página, una línea por criterio).",
       "files": [
         "api/tests/integration/test_roles.py",
-        "api/tests/integration/test_password_reset.py",
         "api/tests/integration/test_initial_admin.py",
-        "api/tests/integration/test_migration_init_db.py",
-        "api/tests/integration/test_validation_errors.py"
+        "api/tests/integration/test_migration_init_db.py"
       ],
-      "owner": "qa",
-      "depends_on": ["API-005"],
-      "priority": "P1",
-      "size": "M",
+      "acceptance": [
+        "register siempre da role user (incluido el body con role admin) y el primer usuario no es admin; /me devuelve el role de la BD",
+        "Ruta solo-admin: 401 sin token, 403 forbidden a user, 200 a admin, 401 a admin inactivo; el cambio de rol en BD se nota con el mismo token y el JWT no lleva role",
+        "ensure_initial_admin: created y luego unchanged (idempotente), promoted solo cambia role, no promueve si ya hay otro admin y el RuntimeError no contiene la contraseña",
+        "Migración por subproceso sobre copia temporal de la BD anterior: filas conservadas, role user, token_version 0, CHECK activo y segunda ejecución sin cambios",
+        "cd api; python -m pytest completo en verde y api/data/app.db no se abre ni cambia"
+      ],
+      "contract_refs": ["§2.1", "§2.3", "§3.4", "§4.5"],
+      "depends_on": ["API-002"],
+      "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Casos de §7.1 a §7.6 del contrato cubiertos con evidencia",
-        "pytest completo en verde",
-        "api/data/app.db no cambia",
-        "Informe en reports/auth-completo/qa-QA-003.md"
-      ]
+      "bugs": []
+    },
+    {
+      "id": "QA-004",
+      "story": "US-03",
+      "layer": "qa",
+      "title": "Integración de la API: forgot-password, reset-password y enlace solo en modo desarrollo",
+      "spec": "Tests de integración de QA con TestClient y las fixtures de api/tests/conftest.py (BD temporal; DEBUG=true). El token en claro NUNCA lo devuelve la API: se obtiene del log con caplog.set_level(logging.INFO, logger='app.mail') y la expresión token=([A-Za-z0-9_-]+) (TestClient ejecuta la tarea en segundo plano antes de devolver la respuesta). Para caducar un token sin esperar, reescribir expires_at de la fila con db_session (ahora - 1 s) y hacer commit; nunca sleep. Fichero tests/integration/test_password_reset.py: forgot con email de usuario activo → 202 con el message exacto 'Si el email está registrado, recibirás un enlace para restablecer la contraseña.'; 1 fila con token_hash de 64 hex, used_at None y 30 min de vida (±1 s); sha256(token del log) == token_hash. Email inexistente, de usuario inactivo y con mayúsculas: 202 igual (mismo estado, cuerpo y conjunto de cabeceras), 0 filas para inexistente e inactivo. Sin enumeración por tiempo (estructural): con services.process_forgot_password sustituido por un espía se llama una vez con el mismo tipo de argumentos para existente e inexistente; con create_password_reset parcheado para lanzar RuntimeError la respuesta sigue siendo 202 y el log solo contiene RuntimeError. Dos forgot seguidos: 1 fila, el token 1 da 400 invalid_token y el 2 da 200. Reset feliz: 200 con message 'Contraseña actualizada. Ya puedes iniciar sesión.', login con la nueva 200 y con la antigua 401, used_at relleno, sin access_token ni refresh_token en la respuesta; mismo token otra vez → 400 invalid_token; caducado → 400 expired_token sin cambiar la contraseña; token inventado, de 43 caracteres aleatorios y el válido con un carácter cambiado → 400 invalid_token; token vacío o de 257 caracteres y campos ausentes → 422; new_password de 7 caracteres → 422 con error.fields[0].code string_too_short; de 73 bytes ('a'*71+'ñ') y 'ñ'*40 → 422 password_too_long con loc [body, new_password] y ctx {max_bytes: 72} (nunca 500) y, tras el 422, el mismo token sigue valiendo; 72 bytes exactos → 200; usuario desactivado tras pedir el enlace → 400 invalid_token. Fugas: ninguna respuesta (202, 200, 400, 422) contiene el token, token_hash ni $2b$; caplog no contiene new_password. Fichero tests/integration/test_mail_link.py: con settings.debug True, forgot de un usuario activo emite exactamente 1 registro INFO del logger app.mail con http://localhost:4200/reset-password?token=<43 caracteres> y el email; con monkeypatch.setattr(settings, 'debug', False) el mismo caso responde 202, la fila existe y no hay ningún registro de app.mail ni caplog.text con reset-password o token=. Informe reports/auth-completo/qa-QA-004.md.",
+      "files": [
+        "api/tests/integration/test_password_reset.py",
+        "api/tests/integration/test_mail_link.py"
+      ],
+      "acceptance": [
+        "forgot: 202 con el cuerpo exacto, fila de 30 min y hash correcto; respuesta indistinguible (estado, cuerpo, cabeceras) para email existente, inexistente e inactivo; sin enumeración por tiempo (estructural)",
+        "reset: feliz (login nueva 200 y antigua 401), reutilizado e inventado → invalid_token, caducado → expired_token, desactivado → invalid_token, dos forgot seguidos → solo vale el último",
+        "Contraseña nueva inválida (7 caracteres, 73 bytes) → 422 con error.fields y el token sigue valiendo; 72 bytes → 200; ningún caso devuelve 500",
+        "Sin fugas: ni el token, ni token_hash, ni $2b$ en respuestas; ni new_password en logs; sin tokens de sesión en la respuesta de reset",
+        "Enlace solo con DEBUG=true: 1 línea INFO en app.mail con DEBUG y ninguna con debug False; cd api; python -m pytest completo en verde"
+      ],
+      "contract_refs": ["§3.1", "§3.2", "§4.3"],
+      "depends_on": ["API-008"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "QA-005",
+      "story": "US-02",
+      "layer": "qa",
+      "title": "Integración de la API: revocación de tokens, envelope del 422 y revisión de los ajustes de EP-01",
+      "spec": "Tests de integración de QA (TestClient, fixtures de api/tests/conftest.py, BD temporal). tests/integration/test_token_revocation.py: login previo da tokens A; forgot + reset (token del log, ver QA-004) → GET /me con A 401 con message 'Token revocado' y POST /refresh con A 401; un login nuevo da tokens B válidos con claim tv == 1 (decodificar con jwt.decode sin verificar firma o con la clave del conftest); un token fabricado sin tv es válido con token_version 0; un refresh normal devuelve par nuevo y el refresh anterior sigue siendo válido (limitación aceptada de ADR-003). tests/integration/test_validation_errors.py: register con contraseña de 73 bytes → 422 con error.code validation_error y error.fields[0] == {loc: [body, password], code: password_too_long, message: La contraseña no puede superar los 72 bytes en UTF-8, ctx: {max_bytes: 72}} y sin clave detail; ningún 422 de register, login, refresh, forgot-password o reset-password contiene la clave input ni el valor enviado de password, new_password o token (cadena de prueba única); BUG-004: el escape JSON ud800 en password, new_password, token, refresh_token y en email (a\\ud800@x.com) y una contraseña de 8 sustitutos aislados en register NUNCA dan 500 (422 con envelope; login con ud800 como contraseña → 401 Credenciales inválidas); JSON mal formado, cuerpo vacío y Content-Type incorrecto → 422 con fields[0].loc[0] == body y sin ctx.error; password numérico → code string_type y campo ausente → missing; /openapi.json: las 5 operaciones con cuerpo tienen 422 → ValidationErrorResponse, HTTPValidationError y ValidationError no existen, /me y /health sin 422; 404 y 405 del framework siguen siendo {detail: ...} y los errores de dominio 400/401/403/409 siguen siendo {error: {code, message}}. Transversal: forgot y reset no requieren Authorization y un GET sobre ellos da 405; preflight OPTIONS de forgot-password y reset-password desde http://localhost:4200 permitido por CORS; ninguna respuesta de auth contiene hashed_password, token_version ni un hash bcrypt. REVISIÓN (excepción documentada a la propiedad de tests): revisar con git diff los ajustes que API-002, API-005 y API-008 hicieron en tests/integration/helpers.py, test_register_password_bytes.py y test_seguridad_y_contrato.py: solo cambios mecánicos (role en UserRead, detail → error.fields, ref del 422) y sin debilitar ninguna aserción. Informe reports/auth-completo/qa-QA-005.md.",
+      "files": [
+        "api/tests/integration/test_token_revocation.py",
+        "api/tests/integration/test_validation_errors.py"
+      ],
+      "acceptance": [
+        "Tras el reseteo: /me y /refresh con los tokens anteriores dan 401 Token revocado; el login nuevo emite tv == 1; sin tv vale con version 0; un refresh normal no revoca el anterior",
+        "422 con envelope: code validation_error, fields con loc, code, message y ctx, sin detail, sin input y sin el valor enviado de password, new_password ni token",
+        "BUG-004: sustitutos Unicode aislados en cualquier campo nunca producen 500; login con ud800 como contraseña da 401",
+        "/openapi.json: 422 → ValidationErrorResponse en las 5 operaciones y sin HTTPValidationError; 404/405 y errores de dominio sin cambios; CORS permitido desde http://localhost:4200; sin hash ni token_version en respuestas",
+        "Los 3 ficheros de EP-01 ajustados solo tienen cambios mecánicos sin debilitar aserciones; cd api; python -m pytest completo en verde y api/data/app.db intacto"
+      ],
+      "contract_refs": ["§3.3", "§3.5"],
+      "depends_on": ["API-008", "API-004"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
     },
     {
       "id": "WEB-001",
       "story": "US-02",
       "layer": "web",
-      "title": "Base de sesión en Angular: HttpClient, interceptores, guards, servicios y rutas",
-      "description": "Implementar el diseño de ARQ-004 (§6.3 a §6.8, ADR-001, ADR-002 y ADR-006) sin tocar todavía el componente de login: environment y API_BASE_URL, normalizeApiError e interceptor de errores, interceptor de Authorization y de refresco, authGuard y guestGuard, sanitizeReturnUrl, modelos TS, AuthService, TokenStorageService, validadores de contraseña (bytes con TextEncoder), cascarón de la app (app.html solo con router-outlet, app.spec.ts reescrito), index.html y rutas públicas base (login con guestGuard y **), con sus *.spec.ts (FE-ER, FE-TK, FE-SV, FE-IN, FE-GD, FE-VL). Sin dependencias npm nuevas.",
+      "title": "Normalizador de errores de la API (ApiError, normalizeApiError e interceptor)",
+      "spec": "Crear en web/src/app/core/http/. (1) api-error.ts: export interface FieldError { field: string | null; code: string; message: string; ctx?: Record<string, unknown> }; export class ApiError extends Error { constructor(readonly status: number, readonly code: string, message: string, readonly fields: FieldError[] = []) { super(message); } }; export function normalizeApiError(err: unknown): ApiError, total (nunca lanza). Reglas, la primera que aplique: HttpErrorResponse con status 0 → ApiError(0, 'network_error', 'No se pudo conectar con el servidor. Inténtalo de nuevo más tarde.'); cuerpo {error: {code, message, fields?}} → (estado HTTP, error.code, error.message tal cual) con fields mapeados desde cada {loc, code, ctx}; cuerpo {detail: [...]} (422 por defecto de FastAPI) → (422, 'validation_error', 'Los datos enviados no son válidos') con fields de loc y type (msg e input se IGNORAN siempre); cuerpo {detail: 'texto'} (404/405 de Starlette) → (estado, 'http_<estado>', 'La operación solicitada no está disponible.'); estado >= 500 o cuerpo no JSON → (estado, 'server_error', 'Error del servidor. Inténtalo de nuevo más tarde.'); cualquier otra cosa (no es HttpErrorResponse, null, cuerpo vacío) → (0, 'unexpected_error', 'Se ha producido un error inesperado.'). field de un FieldError: de loc se quita el primer elemento si es body, query, path, header o cookie y el resto se une con '.'; si queda vacío, null. El message de cada FieldError es SIEMPRE el texto del Front (nunca el de la API) obtenido con fieldErrorMessage. (2) validation-messages.ts: export function fieldErrorMessage(field: string | null, code: string): string; busca por (field, code) y luego solo por code; por defecto 'Valor no válido.'. Textos: password_too_long → 'La contraseña no puede superar los 72 bytes (UTF-8); caracteres como ñ o las tildes ocupan más de uno.'; string_too_short en password y en new_password → 'La contraseña debe tener al menos 8 caracteres.'; string_too_short en username → 'El usuario debe tener al menos 3 caracteres.'; string_too_long en username → 'El usuario no puede superar los 80 caracteres.'; value_error en email → 'Introduce un correo electrónico válido.'; missing → 'Campo obligatorio.'. (3) api-error.interceptor.ts: export const apiErrorInterceptor: HttpInterceptorFn = (req, next) => next(req).pipe(catchError((e) => throwError(() => normalizeApiError(e)))). No copiar ni registrar el cuerpo, input ni contraseñas; ningún console. TypeScript con noPropertyAccessFromIndexSignature: acceder a claves de cuerpos y ctx con corchetes (ctx['max_bytes']). El interceptor aún no se registra (WEB-005). Specs junto a cada pieza (Vitest, jsdom, provideHttpClientTesting para el interceptor). Prettier (100 columnas, comillas simples). Antes de cualquier npm: nvm use 26.0.0. Sin dependencias npm nuevas.",
       "files": [
-        "web/src/environments/environment.ts",
-        "web/src/index.html",
-        "web/src/app/app.config.ts",
-        "web/src/app/app.routes.ts",
-        "web/src/app/app.routes.server.ts",
-        "web/src/app/app.ts",
-        "web/src/app/app.html",
-        "web/src/app/app.css",
-        "web/src/app/app.spec.ts",
-        "web/src/app/core/",
-        "web/src/app/modules/auth/models/",
-        "web/src/app/modules/auth/services/",
-        "web/src/app/modules/auth/validators/"
+        "web/src/app/core/http/api-error.ts",
+        "web/src/app/core/http/validation-messages.ts",
+        "web/src/app/core/http/api-error.interceptor.ts",
+        "web/src/app/core/http/api-error.spec.ts",
+        "web/src/app/core/http/api-error.interceptor.spec.ts"
       ],
-      "owner": "developer",
+      "acceptance": [
+        "HttpErrorResponse con status 0 → ApiError(0, network_error, mensaje de red); cuerpo {error: {code, message}} (401, 409, 400 invalid_token) → status, code y message tal cual",
+        "El envelope 422 (loc [body, new_password], code password_too_long) y el 422 {detail: [{loc, type, msg, input, ctx}]} dan el mismo resultado: field new_password, code password_too_long y message del Front; JSON.stringify(apiError) no contiene el input ni la contraseña de prueba",
+        "{detail: 'Not Found'} → http_404; 500 o cuerpo no JSON → server_error; null, un objeto cualquiera o cuerpo vacío → unexpected_error; el normalizador nunca lanza",
+        "loc [body] → field null; loc [body, a, 0] → field 'a.0'; un code sin entrada → 'Valor no válido.'",
+        "apiErrorInterceptor entrega siempre un ApiError al suscriptor; npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.4"],
       "depends_on": ["ARQ-004"],
-      "priority": "P0",
-      "size": "M",
+      "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "El access token solo vive en memoria y el refresh token en localStorage o sessionStorage según ADR-002, sin acceso a window ni localStorage en el servidor SSR",
-        "Interceptores, guards, normalizador de errores y AuthService cubiertos por *.spec.ts (criterios FE-* de nivel U de §7.7)",
-        "npm run build y npm test -- --no-watch en verde con Node 26.0.0; Prettier aplicado",
-        "Entrega documentada en reports/auth-completo/entrega-WEB-001.md"
-      ]
+      "bugs": []
+    },
+    {
+      "id": "WEB-005",
+      "story": "US-02",
+      "layer": "web",
+      "title": "URL base de la API y HttpClient con el interceptor de errores",
+      "spec": "(1) Crear web/src/environments/environment.ts: export const environment = { apiBaseUrl: 'http://127.0.0.1:8000/api' } (un solo fichero, sin fileReplacements ni environment.prod). (2) Crear web/src/app/core/config/api-base-url.ts: export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', { providedIn: 'root', factory: () => environment.apiBaseUrl }). (3) web/src/app/app.config.ts: añadir provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])) importando apiErrorInterceptor de core/http/api-error.interceptor; conservar provideBrowserGlobalErrorListeners(), provideRouter(routes) y provideClientHydration() y dejar el fichero formateado con Prettier. El authInterceptor se añadirá después (WEB-008) como SEGUNDO elemento del array: el orden final es [apiErrorInterceptor, authInterceptor]. Spec api-base-url.spec.ts: el token inyecta el valor de environment y se puede sobrescribir con TestBed; y una petición HttpClient fallida configurada con los mismos providers (provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])) más provideHttpClientTesting) llega como ApiError. El prerender no debe hacer ninguna llamada HTTP. Node 26.0.0 (nvm use 26.0.0) antes de npm; sin dependencias nuevas.",
+      "files": [
+        "web/src/environments/environment.ts",
+        "web/src/app/core/config/api-base-url.ts",
+        "web/src/app/app.config.ts",
+        "web/src/app/core/config/api-base-url.spec.ts"
+      ],
+      "acceptance": [
+        "Inyectar API_BASE_URL devuelve http://127.0.0.1:8000/api y TestBed puede sobrescribirlo",
+        "app.config.ts incluye provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])) y conserva los providers anteriores",
+        "Una petición HttpClient que falla con los providers de la app llega al suscriptor como ApiError",
+        "npm run build (con prerender) y npm test -- --no-watch en verde con Node 26.0.0; sin dependencias npm nuevas"
+      ],
+      "contract_refs": [],
+      "depends_on": ["WEB-001"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-006",
+      "story": "US-02",
+      "layer": "web",
+      "title": "TokenStorageService: refresh token en localStorage o sessionStorage",
+      "spec": "Crear web/src/app/modules/auth/services/token-storage.service.ts: @Injectable({ providedIn: 'root' }) TokenStorageService, clave 'auth.refresh_token'. Métodos: get(): string | null (lee sessionStorage y, si no está, localStorage; null en el servidor); set(token: string, persistent: boolean): void (escribe en localStorage si persistent o en sessionStorage si no, y borra la clave del otro); update(token: string): void (reescribe el token en el MISMO almacén en el que estaba, para conservar la elección de Recordarme); clear(): void (borra la clave en ambos). TODO acceso a window/localStorage/sessionStorage va protegido con isPlatformBrowser(inject(PLATFORM_ID)) y try/catch (modo privado, cuota o almacenamiento deshabilitado degradan a sin persistencia sin lanzar). Nada en el constructor. Es el ÚNICO fichero de la app (salvo *.spec.ts) que puede nombrar localStorage, sessionStorage o window. Spec token-storage.service.spec.ts. Node 26.0.0 (nvm use 26.0.0).",
+      "files": [
+        "web/src/app/modules/auth/services/token-storage.service.ts",
+        "web/src/app/modules/auth/services/token-storage.service.spec.ts"
+      ],
+      "acceptance": [
+        "set(t, true) escribe solo en localStorage y set(t, false) solo en sessionStorage (clave auth.refresh_token); get lo devuelve; clear vacía ambos",
+        "update(t) reescribe el token en el almacén donde estaba",
+        "Con PLATFORM_ID = 'server', get() es null y set, update y clear no lanzan ni tocan Storage",
+        "Un setItem que lanza (cuota o SecurityError) no se propaga",
+        "npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.3"],
+      "depends_on": ["ARQ-004"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-007",
+      "story": "US-02",
+      "layer": "web",
+      "title": "AuthService y modelos TS: login, registro, refresco, restauración de sesión y recuperación",
+      "spec": "Crear (1) web/src/app/modules/auth/models/auth.models.ts con interfaces espejo del contrato (snake_case, sin capa de mapeo): type UserRole = 'admin' | 'user'; UserCreate {username, email, password}; LoginRequest {email, password}; RefreshRequest {refresh_token}; ForgotPasswordRequest {email}; ResetPasswordRequest {token, new_password}; UserRead {id: number, username, email, role: UserRole, is_active: boolean, created_at: string}; TokenResponse {access_token, refresh_token, token_type: 'bearer', expires_in: number}; MessageResponse {message}; ApiFieldError {loc: (string | number)[], code, message, ctx?}; ApiErrorBody {error: {code, message, fields?: ApiFieldError[]}}; type SessionNotice = 'expirada' | 'revocada' | 'registrada' | 'restablecida'. (2) web/src/app/core/auth/auth-context.ts: export const PUBLIC_ENDPOINT = new HttpContextToken<boolean>(() => false); export const RETRIED = new HttpContextToken<boolean>(() => false). (3) web/src/app/modules/auth/services/auth.service.ts: @Injectable({ providedIn: 'root' }), inject() de HttpClient, API_BASE_URL (core/config/api-base-url), TokenStorageService y PLATFORM_ID. Estado en memoria: status = signal<'unknown' | 'anonymous' | 'authenticated'>('unknown'); user = signal<UserRead | null>(null); isAuthenticated = computed(() => status() === 'authenticated'); role = computed(() => user()?.role ?? null); accessToken(): string | null (campo privado; ni el usuario ni el access token se persisten). Las 5 llamadas públicas (login, register, refresh, forgot, reset) llevan context: new HttpContext().set(PUBLIC_ENDPOINT, true). Métodos: login(c: LoginRequest, remember: boolean): Observable<UserRead> → POST {API_BASE_URL}/auth/login, guarda el access en memoria y el refresh con storage.set(token, remember), luego me() y status = 'authenticated'; si me() falla, clearSession() y se propaga el error. register(p: UserCreate): Observable<UserRead> → POST /auth/register con exactamente {username, email, password}; no inicia sesión ni cambia status. refresh(): Observable<TokenResponse> → POST /auth/refresh con {refresh_token} del almacén; UNA sola petición en vuelo (mismo Observable compartido con shareReplay y liberado en finalize; N llamadas concurrentes = 1 petición); guarda el par nuevo (access en memoria, storage.update); sin refresh token → throwError(() => new ApiError(401, 'no_refresh_token', 'No hay sesión activa.')) sin llamar a la API. me(): Observable<UserRead> → GET /auth/me (con Authorization, no público) y fija user. forgotPassword(email): Observable<MessageResponse> → POST /auth/forgot-password {email}. resetPassword(token, newPassword): Observable<MessageResponse> → POST /auth/reset-password {token, new_password}. logout(): void → clearSession() (solo local: no hay logout en la API). clearSession(): void → borra access y refresh, user = null, status = 'anonymous'; idempotente. restoreSession(): Promise<void> memoizada (una sola ejecución): en el servidor no hace nada; en el navegador, sin refresh token → status 'anonymous'; con él, refresh() + me() → 'authenticated'; si falla con ApiError de status 401 → clearSession(); si falla por red o 5xx → status 'anonymous' SIN borrar el token. Los errores llegan como ApiError gracias a apiErrorInterceptor (en las specs usar provideHttpClient(withInterceptors([apiErrorInterceptor])) y provideHttpClientTesting). Spec auth.service.spec.ts. Sin lecturas de almacenamiento en el constructor. Node 26.0.0 (nvm use 26.0.0); sin dependencias nuevas.",
+      "files": [
+        "web/src/app/modules/auth/models/auth.models.ts",
+        "web/src/app/core/auth/auth-context.ts",
+        "web/src/app/modules/auth/services/auth.service.ts",
+        "web/src/app/modules/auth/services/auth.service.spec.ts"
+      ],
+      "acceptance": [
+        "login(c, remember): POST /auth/login con {email, password} y luego GET /auth/me; user() con role, status authenticated, refresh en el almacén de remember y el access token en ningún Storage; login 401 deja status anonymous y Storage vacío; si /me falla se descarta la sesión",
+        "register envía exactamente {username, email, password} (sin rol) y no cambia status; forgotPassword y resetPassword envían {email} y {token, new_password}",
+        "Las 5 llamadas públicas llevan PUBLIC_ENDPOINT y no llevan Authorization",
+        "refresh() con 3 llamadas concurrentes hace 1 POST /auth/refresh y guarda el par en el mismo almacén; sin refresh token lanza ApiError no_refresh_token sin HTTP",
+        "restoreSession memoizada: sin token → anonymous sin HTTP; con token → authenticated; refresco 401 → almacén vacío; red o 5xx → anonymous con el token conservado; en servidor no hace nada; logout y clearSession idempotentes; npm test -- --no-watch y npm run build en verde"
+      ],
+      "contract_refs": ["§5.3", "§5.5"],
+      "depends_on": ["WEB-001", "WEB-005", "WEB-006"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-008",
+      "story": "US-02",
+      "layer": "web",
+      "title": "authInterceptor: Authorization, refresco y reintento único ante 401",
+      "spec": "Crear web/src/app/core/auth/auth.interceptor.ts: export const authInterceptor: HttpInterceptorFn, con inject(AuthService), inject(Router) e inject(API_BASE_URL) dentro de la función. 1) Pasa sin tocar la petición si lleva PUBLIC_ENDPOINT (auth-context.ts) o si su URL no empieza por API_BASE_URL (nunca se envía el token a otro origen). 2) Si hay auth.accessToken(), clona la petición con la cabecera Authorization: Bearer <token>. 3) Ante un HttpErrorResponse 401 y sin RETRIED: llama a auth.refresh() (compartido: N 401 concurrentes provocan UN solo /refresh) y reintenta UNA vez con el token nuevo y context RETRIED = true; un 401 tras el reintento no vuelve a refrescar (sin bucles) y se propaga. 4) Si el refresco falla con ApiError de status 401 (incluye 'Token revocado' y no_refresh_token): auth.clearSession(); motivo = 'revocada' si el message del 401 (de la petición original o del refresco) es exactamente 'Token revocado' y 'expirada' en otro caso; navega a /login con queryParams { returnUrl: <ruta actual>, motivo } salvo que la ruta actual ya sea /login, /register, /forgot-password o /reset-password (sin bucle); propaga el error original. Si el refresco falla por red o 5xx: se propaga el error SIN cerrar la sesión ni navegar. 5) 403 y demás estados pasan tal cual. En web/src/app/app.config.ts, añadir authInterceptor como SEGUNDO elemento: withInterceptors([apiErrorInterceptor, authInterceptor]) (apiErrorInterceptor el más externo: authInterceptor ve el HttpErrorResponse crudo y los consumidores reciben ApiError). Spec auth.interceptor.spec.ts con HttpTestingController y un AuthService con espías o real. Node 26.0.0 (nvm use 26.0.0); sin dependencias nuevas.",
+      "files": [
+        "web/src/app/core/auth/auth.interceptor.ts",
+        "web/src/app/app.config.ts",
+        "web/src/app/core/auth/auth.interceptor.spec.ts"
+      ],
+      "acceptance": [
+        "Authorization: Bearer solo en peticiones a API_BASE_URL con access token (no en otro origen); un endpoint público con 401 no lleva Authorization ni dispara refresco ni reintento",
+        "401 → refresh correcto → reintento único con el token nuevo; un segundo 401 no vuelve a refrescar y se propaga; 3 peticiones concurrentes con 401 provocan 1 solo /refresh y 3 reintentos",
+        "Refresco que falla con 401 (también Token revocado): clearSession, navegación a /login con returnUrl y motivo expirada (revocada si el message es exactamente Token revocado) y error propagado; si ya está en /login no navega",
+        "Refresco que falla por red o 5xx: sesión intacta, sin navegación, error propagado; todo fallo HTTP llega al consumidor como ApiError (orden [apiErrorInterceptor, authInterceptor])",
+        "npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.3"],
+      "depends_on": ["WEB-007"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-009",
+      "story": "US-02",
+      "layer": "web",
+      "title": "authGuard, guestGuard y sanitizeReturnUrl",
+      "spec": "Crear (1) web/src/app/core/auth/return-url.ts: export function sanitizeReturnUrl(value: string | null): string | null — solo rutas internas: empieza por '/', no por '//' ni por barra seguida de barra invertida, sin esquema, sin '://' ni caracteres de control (saltos de línea incluidos), y no apunta a /login, /register, /forgot-password ni /reset-password (con o sin query); si no cumple devuelve null (el llamador usa /inicio). Acepta '/inicio' y '/inicio?x=1'; rechaza 'https://evil.com', '//evil.com', barra+barra invertida+evil.com, 'javascript:alert(1)', '', null, '/login' y '/reset-password?token=x'. (2) web/src/app/core/auth/auth.guard.ts: export const authGuard: CanActivateFn y export const guestGuard: CanActivateFn, asíncronos, con inject(AuthService), inject(Router) e inject(PLATFORM_ID). En el navegador esperan await auth.restoreSession(). authGuard: autenticado → true; si no → router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } }). guestGuard: autenticado → router.createUrlTree(['/inicio']); si no → true. En el servidor (isPlatformBrowser false): authGuard nunca concede (devuelve el UrlTree a /login, fail-closed) y guestGuard devuelve true; ninguno llama a la API ni a restoreSession. Specs return-url.spec.ts y auth.guard.spec.ts. Node 26.0.0 (nvm use 26.0.0); sin dependencias nuevas.",
+      "files": [
+        "web/src/app/core/auth/return-url.ts",
+        "web/src/app/core/auth/auth.guard.ts",
+        "web/src/app/core/auth/return-url.spec.ts",
+        "web/src/app/core/auth/auth.guard.spec.ts"
+      ],
+      "acceptance": [
+        "sanitizeReturnUrl acepta /inicio y /inicio?x=1 y devuelve null con https://evil.com, //evil.com, barra+barra invertida, javascript:alert(1), cadena vacía, null, /login, /reset-password?token=x y valores con saltos de línea",
+        "authGuard en el navegador espera restoreSession: anónimo → UrlTree /login con queryParams returnUrl = state.url; autenticado → true",
+        "guestGuard en el navegador: autenticado → UrlTree /inicio; anónimo → true",
+        "En el servidor authGuard nunca devuelve true (→ /login) y guestGuard devuelve true; ninguno llama a la API",
+        "npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.2"],
+      "depends_on": ["WEB-007"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-010",
+      "story": "US-01",
+      "layer": "web",
+      "title": "Validadores de contraseña espejo de la API (puntos de código y bytes)",
+      "spec": "Crear web/src/app/modules/auth/validators/password.validators.ts con funciones puras que devuelven ValidatorFn de @angular/forms: passwordMinLength(min: number): ValidatorFn — cuenta PUNTOS DE CÓDIGO (Array.from(value).length), no unidades UTF-16 (como Pydantic); error { password_too_short: { min } }; valor vacío → null (de lo vacío se encarga Validators.required). passwordMaxBytes(max: number): ValidatorFn — new TextEncoder().encode(value).length > max → error { password_too_long: { max_bytes: max } }; NUNCA usar el atributo maxlength (cuenta caracteres, no bytes; ADR-004): 72 bytes exactos son válidos y 73 no ('a'.repeat(70)+'ñ' pasa, 'a'.repeat(71)+'ñ' falla, 'ñ'.repeat(36) pasa y 'ñ'.repeat(37) falla). passwordsMatch(passwordName = 'password', confirmName = 'confirm_password'): ValidatorFn de FormGroup — si ambos valores difieren devuelve { mismatch: true } (en el grupo); el campo de confirmación no se envía a la API. No recortar (trim) ni registrar nunca la contraseña. Spec password.validators.spec.ts. Node 26.0.0 (nvm use 26.0.0).",
+      "files": [
+        "web/src/app/modules/auth/validators/password.validators.ts",
+        "web/src/app/modules/auth/validators/password.validators.spec.ts"
+      ],
+      "acceptance": [
+        "passwordMaxBytes(72): 'a'.repeat(70)+'ñ' y 'ñ'.repeat(36) válidos; 'a'.repeat(71)+'ñ' y 'ñ'.repeat(37) → password_too_long",
+        "passwordMinLength(8): 7 puntos de código → error; 8 → válido; '😀'.repeat(4) (4 puntos de código, 8 unidades UTF-16) → error",
+        "passwordsMatch: valores distintos → error mismatch en el grupo; iguales → null",
+        "Los validadores son funciones puras sin dependencias de DOM ni de almacenamiento; npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.6"],
+      "depends_on": ["ARQ-004"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-011",
+      "story": "US-02",
+      "layer": "web",
+      "title": "Cascarón de la app: solo router-outlet, index.html en español y app.spec.ts",
+      "spec": "Dejar el cascarón limpio (hoy app.html conserva la plantilla de bienvenida de Angular con estilos y logos y app.spec.ts espera 'Hello, web', lo que rompería todas las rutas). (1) web/src/app/app.html: solo <router-outlet />. (2) web/src/app/app.ts: quitar el signal title y su import (queda @Component con imports [RouterOutlet], selector 'app-root', styleUrl y templateUrl; app.css ya está vacío y no se toca). (3) web/src/index.html: lang='es', <title>GrangesAndreu</title> y <meta name='referrer' content='no-referrer'> junto a las demás meta. (4) web/src/app/app.spec.ts: reescribir con provideRouter([]) — la app se crea y no hay ningún h1 ni el texto 'Hello'. No tocar app.config.ts ni las rutas (las añaden las tareas WEB siguientes). Node 26.0.0 (nvm use 26.0.0); Prettier.",
+      "files": [
+        "web/src/app/app.html",
+        "web/src/app/app.ts",
+        "web/src/index.html",
+        "web/src/app/app.spec.ts"
+      ],
+      "acceptance": [
+        "app.html contiene solo <router-outlet /> (sin 'Hello', sin bloque style ni logos) y app.ts ya no define title",
+        "index.html: html lang='es', title no vacío y meta referrer con content no-referrer",
+        "app.spec.ts crea la app con provideRouter([]) y comprueba que no hay h1",
+        "npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": [],
+      "depends_on": ["ARQ-004"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
     },
     {
       "id": "WEB-004",
       "story": "US-02",
       "layer": "web",
-      "title": "Login real, pantalla de inicio y cierre de sesión",
-      "description": "Implementar el diseño de ARQ-004 (§6.9, EP-02-F1 y EP-02-F8): el LoginComponent usa AuthService (signals, inject(), Recordarme, errores de la API, returnUrl, avisos motivo) en lugar de la simulación y /dashboard; nueva pantalla privada mínima inicio (usuario, correo, rol y Cerrar sesión local) con authGuard. No toca todavía los dos enlaces href=# del login.",
+      "title": "Login real contra la API y ruta /login",
+      "spec": "Modificar web/src/app/modules/auth/login/login.component.ts y .html (mantiene standalone, FormsModule y ngModel con credentials {email, password} y rememberMe; estilo Tailwind actual). Cambios: inject(AuthService), inject(Router) e inject(ActivatedRoute) en lugar del constructor; loading = signal(false), errorMessage = signal<string | null>(null) y notice = signal<string | null>(null) (la app es sin zone.js: todo estado asíncrono en signal). onSubmit(): si loading() no hace nada; loading.set(true); errorMessage.set(null); auth.login({ email: credentials.email.trim(), password: credentials.password }, rememberMe).subscribe: éxito → router.navigateByUrl(sanitizeReturnUrl(route.snapshot.queryParamMap.get('returnUrl')) ?? '/inicio') (la query se lee al enviar, no en el constructor; sanitizeReturnUrl de core/auth/return-url); error (ApiError) → loading.set(false) y errorMessage = e.message para 401 (mensaje de la API: 'Credenciales inválidas' o 'La cuenta está desactivada'); para 422 → 'Introduce un correo electrónico válido.' si hay un field 'email' y 'Credenciales inválidas' en otro caso; para red o 5xx → e.message del normalizador. La contraseña nunca se recorta, registra ni guarda. Aviso informativo por el query motivo, leído en afterNextRender (la página se prerenderiza sin query): tabla cerrada expirada → 'Tu sesión ha caducado. Inicia sesión de nuevo.'; revocada → 'Tu sesión se ha cerrado porque la contraseña cambió. Inicia sesión de nuevo.'; registrada → 'Cuenta creada. Inicia sesión para continuar.'; restablecida → 'Contraseña actualizada. Inicia sesión con la nueva.'; cualquier otro valor (incluido <script> o __proto__) se ignora (usar Object.hasOwn sobre la tabla). Plantilla: errorMessage en un bloque con role='alert'; notice en un bloque con role='status'; botón submit disabled mientras loading con aria-busy y el texto 'Iniciando sesión...'; autocomplete='email' y 'current-password'; ayuda bajo Recordarme: 'Mantiene la sesión iniciada en este dispositivo'; sin maxlength. NO tocar todavía los dos enlaces href='#' (los cambia WEB-014). Rutas, ambos ficheros a la vez: app.routes.ts → { path: '', pathMatch: 'full', redirectTo: 'login' }, { path: 'login', title: 'Iniciar sesión', canActivate: [guestGuard], loadComponent: () => import('./modules/auth/login/login.component').then((m) => m.LoginComponent) } y { path: '**', redirectTo: '' }; app.routes.server.ts → { path: 'login', renderMode: RenderMode.Prerender } y { path: '**', renderMode: RenderMode.Client } (sustituye al Prerender global actual). Spec login.component.spec.ts con AuthService simulado. Node 26.0.0 (nvm use 26.0.0); sin dependencias nuevas.",
       "files": [
         "web/src/app/modules/auth/login/login.component.ts",
         "web/src/app/modules/auth/login/login.component.html",
-        "web/src/app/modules/auth/login/login.component.spec.ts",
-        "web/src/app/modules/inicio/inicio/inicio.component.ts",
-        "web/src/app/modules/inicio/inicio/inicio.component.html",
-        "web/src/app/modules/inicio/inicio/inicio.component.css",
-        "web/src/app/modules/inicio/inicio/inicio.component.spec.ts",
-        "web/src/app/app.routes.ts"
+        "web/src/app/app.routes.ts",
+        "web/src/app/app.routes.server.ts",
+        "web/src/app/modules/auth/login/login.component.spec.ts"
       ],
-      "owner": "developer",
-      "depends_on": ["WEB-001"],
-      "priority": "P0",
+      "acceptance": [
+        "Enviar llama a auth.login con el correo recortado, la contraseña tal cual y rememberMe; mientras tanto el botón está disabled con aria-busy y el texto Iniciando sesión...; loading vuelve a false y la vista se repinta",
+        "Destino tras el login: /inicio por defecto; returnUrl=/inicio?x=1 válido va ahí; https://evil.com y //evil.com van a /inicio",
+        "Errores: 401 Credenciales inválidas y La cuenta está desactivada en un bloque role=alert; 422 sobre password → Credenciales inválidas; red → mensaje de red",
+        "motivo expirada, revocada, registrada y restablecida muestran su texto en role=status; cualquier otro valor (incluido <script>) no muestra aviso ni se repite en la página",
+        "Rutas: '' → login, login con guestGuard y loadComponent, ** → ''; servidor: login en Prerender y ** en Client; npm run build (prerender de /login sin llamadas a la API) y npm test -- --no-watch en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.2", "§5.6"],
+      "depends_on": ["WEB-008", "WEB-009", "WEB-011"],
       "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "El login llama a la API real, muestra los errores de la API y navega a returnUrl o a /inicio",
-        "/inicio es privada, muestra usuario, correo y rol y Cerrar sesión lleva a /login",
-        "npm run build y npm test -- --no-watch en verde con Node 26.0.0; Prettier aplicado",
-        "Entrega documentada en reports/auth-completo/entrega-WEB-004.md"
-      ]
+      "bugs": []
+    },
+    {
+      "id": "WEB-012",
+      "story": "US-02",
+      "layer": "web",
+      "title": "Pantalla privada /inicio con usuario, rol y cierre de sesión",
+      "spec": "Crear web/src/app/modules/inicio/inicio/inicio.component.ts y .html (standalone, inject(AuthService) e inject(Router); sin .css: no se declara styleUrl; Tailwind con el mismo contenedor y tarjeta del login: bg-gradient-to-br, rounded-2xl shadow-xl max-w-md, cabecera bg-indigo-600). Muestra, leídos de auth.user(): nombre de usuario, correo y rol (admin → 'Administrador', user → 'Usuario'; si user() es null no muestra nada) y un botón type='button' 'Cerrar sesión' que llama a auth.logout() y navega con router.navigateByUrl('/login'). Es un marcador del panel futuro: sin datos de dominio ni opciones por rol (no hay roleGuard en esta épica). Ruta en app.routes.ts, antes de '**': { path: 'inicio', title: 'Inicio', canActivate: [authGuard], loadComponent: () => import('./modules/inicio/inicio/inicio.component').then((m) => m.InicioComponent) }. app.routes.server.ts NO necesita entrada: queda cubierta por '**' → Client (privada, no se prerenderiza). Spec inicio.component.spec.ts con AuthService simulado. Node 26.0.0 (nvm use 26.0.0); sin dependencias nuevas.",
+      "files": [
+        "web/src/app/modules/inicio/inicio/inicio.component.ts",
+        "web/src/app/modules/inicio/inicio/inicio.component.html",
+        "web/src/app/app.routes.ts",
+        "web/src/app/modules/inicio/inicio/inicio.component.spec.ts"
+      ],
+      "acceptance": [
+        "Con un usuario admin muestra su nombre, correo y 'Administrador'; con rol user muestra 'Usuario'",
+        "Cerrar sesión llama a auth.logout() y navega a /login",
+        "La ruta inicio usa authGuard y loadComponent, está antes de ** y no tiene entrada Prerender en app.routes.server.ts",
+        "npm test -- --no-watch y npm run build en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.2"],
+      "depends_on": ["WEB-004", "WEB-009"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
     },
     {
       "id": "WEB-002",
       "story": "US-01",
       "layer": "web",
-      "title": "Pantalla de registro",
-      "description": "Implementar la pantalla de registro del diseño aprobado (username, email, contraseña), enlazada desde el login, con validación y errores de la API.",
+      "title": "Pantalla de registro (/register)",
+      "spec": "Crear web/src/app/modules/auth/register/register.component.ts y .html (standalone, inject(); sin .css; Tailwind con el estilo del login; imports ReactiveFormsModule y RouterLink). Formulario con inject(FormBuilder).nonNullable: username (required, 3 a 80 caracteres tras recortar), email (required, Validators.email), password (required, passwordMinLength(8) y passwordMaxBytes(72) de modules/auth/validators/password.validators; SIN atributo maxlength) y confirm_password; validador de grupo passwordsMatch. No hay campo de rol. Estado en signal: loading, errorMessage (aviso general) y errores de servidor por campo. Al enviar: markAllAsTouched; hacer control.setValue(valor.trim()) en username y email (la contraseña NUNCA se recorta); si el formulario es inválido no llama a la API; si es válido, auth.register({ username, email, password }) (exactamente esas 3 claves: sin confirm_password ni role). 201 → auth.login({ email, password }, false) y router.navigateByUrl('/inicio'); si ese login falla → router.navigateByUrl('/login?motivo=registrada'). Errores (ApiError): 409 conflict con message 'El email ya está registrado' → error bajo email y 'El nombre de usuario ya está registrado' → error bajo username (texto exacto; otro texto → aviso general); 422 → cada FieldError (password, username, email) bajo su campo con su message del Front (password_too_long y string_too_short bajo la contraseña); campos desconocidos o field null → aviso general; red o 5xx → aviso general con e.message. Los errores de servidor se limpian al editar el campo. Accesibilidad: label for en cada input, autocomplete (username, email, new-password), aria-invalid y aria-describedby apuntando a id='<campo>-error', avisos con role='alert', botón submit disabled y aria-busy mientras loading; enlace '¿Ya tienes cuenta? Inicia sesión' con routerLink='/login'. Rutas, ambos ficheros a la vez: app.routes.ts, antes de '**': { path: 'register', title: 'Crear cuenta', canActivate: [guestGuard], loadComponent: ... RegisterComponent }; app.routes.server.ts: { path: 'register', renderMode: RenderMode.Prerender } antes de '**'. El prerender no debe llamar a la API ni leer almacenamiento. Spec register.component.spec.ts con AuthService simulado. Node 26.0.0 (nvm use 26.0.0).",
       "files": [
         "web/src/app/modules/auth/register/register.component.ts",
         "web/src/app/modules/auth/register/register.component.html",
-        "web/src/app/modules/auth/register/register.component.css",
-        "web/src/app/modules/auth/register/register.component.spec.ts",
-        "web/src/app/modules/auth/login/login.component.ts",
-        "web/src/app/modules/auth/login/login.component.html",
         "web/src/app/app.routes.ts",
-        "web/src/app/app.routes.server.ts"
+        "web/src/app/app.routes.server.ts",
+        "web/src/app/modules/auth/register/register.component.spec.ts"
       ],
-      "owner": "developer",
-      "depends_on": ["WEB-004"],
-      "priority": "P1",
-      "size": "M",
+      "acceptance": [
+        "Sin llamada a la API con usuario de 2 u 81 caracteres, correo inválido, contraseña de 7 caracteres o de 73 bytes ('a'.repeat(71)+'ñ') o contraseñas distintas (error bajo el campo); 72 bytes exactos sí llaman",
+        "El cuerpo enviado es exactamente {username, email, password}: sin confirm_password ni role y con la contraseña sin trim",
+        "201 → login automático con remember false y navegación a /inicio; si ese login falla → /login?motivo=registrada",
+        "409 'El email ya está registrado' bajo email y 'El nombre de usuario ya está registrado' bajo username (otro texto → aviso general); 422 (password_too_long, string_too_short) bajo la contraseña; field null → aviso general",
+        "Ruta register con guestGuard en Prerender (ambos ficheros de rutas); npm run build (prerender de /register sin llamadas a la API) y npm test -- --no-watch en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.6"],
+      "depends_on": ["WEB-012", "WEB-010"],
+      "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "El enlace Regístrate aquí del login lleva a la pantalla",
-        "Muestra los errores 409 y 422 de la API",
-        "npm run build y npm test -- --no-watch en verde",
-        "Entrega documentada en reports/auth-completo/entrega-WEB-002.md"
-      ]
+      "bugs": []
     },
     {
       "id": "WEB-003",
       "story": "US-03",
       "layer": "web",
-      "title": "Pantallas de forgot-password y reset-password",
-      "description": "Implementar las pantallas de solicitud de recuperación (email) y de reseteo con el token de la URL, según el diseño aprobado. Se enlaza desde el login.",
+      "title": "Pantalla de solicitud de recuperación (/forgot-password)",
+      "spec": "Crear web/src/app/modules/auth/forgot-password/forgot-password.component.ts y .html (standalone, inject(); sin .css; Tailwind con el estilo del login; imports ReactiveFormsModule y RouterLink). Formulario con inject(FormBuilder).nonNullable: email (required, Validators.email). Estado en signal: loading, sent, message y errorMessage. Al enviar: markAllAsTouched; si es inválido no llama a la API; si es válido, auth.forgotPassword(email.trim()). 202 → oculta el formulario y muestra el message de la API en un aviso role='status' con enlace 'Volver a iniciar sesión' (routerLink='/login'): el resultado es IDÉNTICO exista o no la cuenta (no hay ninguna rama que dependa de la existencia del email). 422 → error bajo el campo email; red o 5xx → aviso general role='alert' con e.message y el formulario sigue activo. Accesibilidad: label for, autocomplete='email', aria-invalid y aria-describedby='email-error', botón disabled y aria-busy mientras loading. Enlace 'Volver a iniciar sesión' también en el formulario. Rutas, ambos ficheros a la vez: app.routes.ts, antes de '**': { path: 'forgot-password', title: 'Recuperar contraseña', canActivate: [guestGuard], loadComponent: ... ForgotPasswordComponent }; app.routes.server.ts: { path: 'forgot-password', renderMode: RenderMode.Prerender } antes de '**'. El prerender no llama a la API. Spec forgot-password.component.spec.ts con AuthService simulado. Node 26.0.0 (nvm use 26.0.0).",
       "files": [
-        "web/src/app/modules/auth/forgot-password/",
-        "web/src/app/modules/auth/reset-password/",
-        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/modules/auth/forgot-password/forgot-password.component.ts",
+        "web/src/app/modules/auth/forgot-password/forgot-password.component.html",
         "web/src/app/app.routes.ts",
         "web/src/app/app.routes.server.ts",
-        "web/src/server.ts"
+        "web/src/app/modules/auth/forgot-password/forgot-password.component.spec.ts"
       ],
-      "owner": "developer",
+      "acceptance": [
+        "Email vacío o inválido: error de campo y ninguna llamada a la API",
+        "202 con dos correos distintos: formulario oculto y el message de la API en role=status; el DOM resultante es idéntico para ambos",
+        "422 → error bajo email; red o 5xx → aviso general role=alert y el formulario sigue activo",
+        "Ruta forgot-password con guestGuard en Prerender (ambos ficheros de rutas); el prerender no llama a la API",
+        "npm run build y npm test -- --no-watch en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.6"],
       "depends_on": ["WEB-002"],
-      "priority": "P1",
-      "size": "M",
+      "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "El enlace Olvidaste tu contraseña del login lleva a la pantalla",
-        "Mensaje de confirmación igual exista o no el email",
-        "Reseteo con token válido, caducado o ya usado muestra el resultado correcto",
-        "npm run build y npm test -- --no-watch en verde",
-        "Entrega documentada en reports/auth-completo/entrega-WEB-003.md"
-      ]
+      "bugs": []
+    },
+    {
+      "id": "WEB-013",
+      "story": "US-03",
+      "layer": "web",
+      "title": "Pantalla de nueva contraseña (/reset-password?token=...)",
+      "spec": "Crear web/src/app/modules/auth/reset-password/reset-password.component.ts y .html (standalone, inject(); sin .css; Tailwind con el estilo del login; imports ReactiveFormsModule y RouterLink). Formulario con inject(FormBuilder).nonNullable: new_password (required, passwordMinLength(8), passwordMaxBytes(72); SIN maxlength) y confirm_password con passwordsMatch (el token NO es un campo). Estado en signal: state: 'form' | 'enlace_no_valido' | 'hecho' | 'rechazado', token (signal<string | null>), serverMessage, loading y errorMessage. En afterNextRender (nunca en el constructor ni en el primer pase: la ruta es Client pero se mantiene la regla): lee route.snapshot.queryParamMap.get('token') a un signal y LO QUITA de la URL con router.navigate([], { queryParams: { token: null }, queryParamsHandling: 'merge', replaceUrl: true }). Sin token o token vacío → state 'enlace_no_valido' con el texto 'El enlace no es válido o ya se ha utilizado. Solicita uno nuevo.' y botón 'Solicitar un enlace nuevo' (routerLink='/forgot-password'), SIN llamar a la API (recargar tras quitarlo lleva a este estado). El token solo vive en memoria: nunca en console, localStorage/sessionStorage ni el DOM. Al enviar: markAllAsTouched; inválido → sin llamada; válido → auth.resetPassword(token, new_password) (contraseña sin trim). 200 → state 'hecho' con el message de la API y enlace 'Iniciar sesión' con routerLink='/login' y queryParams { motivo: 'restablecida' }, y auth.clearSession() (la sesión local ya está revocada). 400 con code invalid_token o expired_token → state 'rechazado': panel con el message de la API y botón 'Solicitar un enlace nuevo' (/forgot-password); el formulario se oculta. 422 → error bajo new_password (message del Front) y el TOKEN SE CONSERVA para reintentar. Red o 5xx → aviso general role='alert'. Accesibilidad como el registro (label for, autocomplete='new-password', aria-invalid, aria-describedby, role alert/status, botón disabled y aria-busy). Rutas, ambos ficheros a la vez: app.routes.ts, antes de '**': { path: 'reset-password', title: 'Nueva contraseña', loadComponent: ... ResetPasswordComponent } SIN guestGuard (quien tiene sesión también puede usar el enlace); app.routes.server.ts: { path: 'reset-password', renderMode: RenderMode.Client, headers: { 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store' } } antes de '**'. Spec reset-password.component.spec.ts con AuthService simulado. Node 26.0.0 (nvm use 26.0.0).",
+      "files": [
+        "web/src/app/modules/auth/reset-password/reset-password.component.ts",
+        "web/src/app/modules/auth/reset-password/reset-password.component.html",
+        "web/src/app/app.routes.ts",
+        "web/src/app/app.routes.server.ts",
+        "web/src/app/modules/auth/reset-password/reset-password.component.spec.ts"
+      ],
+      "acceptance": [
+        "Entrar con ?token=abc: lee el token, lo quita de la URL (replaceUrl, sin token en location.search) y no lo escribe en Storage, console ni DOM",
+        "Sin token, token vacío o recarga tras quitarlo: estado 'El enlace no es válido…' con botón a /forgot-password y sin llamada a la API",
+        "Envío correcto: POST con {token, new_password}; 200 → message de la API, clearSession() y enlace a /login?motivo=restablecida; 400 invalid_token y expired_token → panel con el message de la API y botón 'Solicitar un enlace nuevo' con el formulario oculto",
+        "422 password_too_long bajo new_password y el token se conserva (un segundo envío válido usa el mismo token); validación de cliente igual que el registro (7 caracteres, 73 bytes, sin coincidencia → sin llamada)",
+        "Ruta reset-password sin guard, en Client con las cabeceras Referrer-Policy y Cache-Control en app.routes.server.ts, nunca en Prerender; npm run build y npm test -- --no-watch en verde con Node 26.0.0"
+      ],
+      "contract_refs": ["§5.2", "§5.6"],
+      "depends_on": ["WEB-003", "WEB-010"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-015",
+      "story": "US-03",
+      "layer": "web",
+      "title": "Cabeceras de /reset-password en el servidor SSR (defensa en profundidad)",
+      "spec": "En web/src/server.ts añadir, ANTES de express.static y del manejador de Angular, un middleware solo para la ruta /reset-password que fije res.setHeader('Referrer-Policy', 'no-referrer') y res.setHeader('Cache-Control', 'no-store') y llame a next(). Es redundante con ServerRoute.headers (WEB-013) a propósito: garantiza las cabeceras aunque el framework no las emita en una ruta Client. No añadir ningún log de URL ni de query (el token va en la URL de ese enlace) ni leer req.query. No tocar nada más de server.ts. Verificación del Developer (una sola vez): nvm use 26.0.0, npm run build y arrancar con PORT propio distinto de 4200 y 8000 (npm run serve:ssr:web), comprobar con curl -I 'http://localhost:<PORT>/reset-password?token=x' las dos cabeceras y parar el proceso. Sin dependencias nuevas.",
+      "files": [
+        "web/src/server.ts"
+      ],
+      "acceptance": [
+        "GET /reset-password?token=x devuelve Referrer-Policy: no-referrer y Cache-Control: no-store",
+        "Otras rutas (p. ej. /login) no reciben esas cabeceras del middleware",
+        "server.ts no escribe en el log la URL ni la query de ninguna petición",
+        "npm run build en verde con Node 26.0.0 y el proceso de prueba queda parado"
+      ],
+      "contract_refs": ["§5.7"],
+      "depends_on": ["WEB-013"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "WEB-014",
+      "story": "US-01",
+      "layer": "web",
+      "title": "Enlaces del login a /register y /forgot-password",
+      "spec": "En web/src/app/modules/auth/login/login.component.ts añadir RouterLink a imports; en login.component.html sustituir los dos href='#': '¿Olvidaste tu contraseña?' → routerLink='/forgot-password' y 'Regístrate aquí' → routerLink='/register' (sin href='#'; mismas clases). No cambiar nada más del login. Ampliar login.component.spec.ts: los dos enlaces tienen el destino correcto. Las rutas /register y /forgot-password ya existen (WEB-002 y WEB-003). Node 26.0.0 (nvm use 26.0.0).",
+      "files": [
+        "web/src/app/modules/auth/login/login.component.ts",
+        "web/src/app/modules/auth/login/login.component.html",
+        "web/src/app/modules/auth/login/login.component.spec.ts"
+      ],
+      "acceptance": [
+        "El enlace '¿Olvidaste tu contraseña?' apunta a /forgot-password y 'Regístrate aquí' a /register",
+        "No queda ningún href='#' en login.component.html",
+        "npm run build (prerender de /login) y npm test -- --no-watch en verde con Node 26.0.0"
+      ],
+      "contract_refs": [],
+      "depends_on": ["WEB-002", "WEB-003"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
     },
     {
       "id": "QA-002",
-      "story": "US-03",
+      "story": "US-01",
       "layer": "qa",
-      "title": "Integración API-Web del flujo completo de autenticación",
-      "description": "Verificar el flujo de extremo a extremo entre la API y la Web (la parte solo-API la cubre QA-003): registro, login, forgot y reset desde las pantallas (token válido, caducado, reutilizado), sesión con el rol de /me, CORS, tratamiento de errores del Front, SSR y build de las rutas nuevas, con tests persistentes de flujo en api/tests/integration/test_auth_flow.py y los pasos manuales documentados mientras no exista Playwright.",
+      "title": "Integración API-Front: contrato que consume la Web (mensajes, CORS y flujo completo)",
+      "spec": "Test persistente en api/tests/integration/test_auth_flow.py (TestClient, fixtures de api/tests/conftest.py, BD temporal, DEBUG=true; el token de reseteo sale del log app.mail con caplog) que ejercita la API exactamente como la conduce la Web. (1) Flujo: register → 201 con role user y sin tokens → login con las mismas credenciales 200 → /me con role user → forgot 202 → reset con el token del log 200 → login con la contraseña antigua 401 y con la nueva 200 → el mismo enlace otra vez 400 invalid_token → otro forgot y expires_at en el pasado (db_session) → 400 expired_token. (2) Mensajes exactos que interpreta el Front: 409 conflict con 'El email ya está registrado' y 'El nombre de usuario ya está registrado'; 401 unauthorized con 'Credenciales inválidas' y 'La cuenta está desactivada'; 401 'Token revocado' en /me y /refresh tras el reseteo; 422 con error.fields[*].loc y code que traduce validation-messages.ts (password string_too_short y password_too_long, username string_too_short y string_too_long, email value_error, missing). (3) CORS: preflight OPTIONS desde http://localhost:4200 para login, register, refresh, me, forgot-password y reset-password con Content-Type y Authorization permitidos; un origen no configurado no recibe Access-Control-Allow-Origin. (4) Admin sembrado con ensure_initial_admin → /me con role admin; un usuario registrado no puede obtener admin (ni con role admin en el body). Informe reports/auth-completo/qa-QA-002.md (≤ 1 página).",
       "files": [
         "api/tests/integration/test_auth_flow.py"
       ],
-      "owner": "qa",
-      "depends_on": ["QA-003", "WEB-003"],
-      "priority": "P1",
-      "size": "M",
+      "acceptance": [
+        "Flujo register → login → /me → forgot → reset → login con la nueva (la antigua falla); el enlace reutilizado da invalid_token y el caducado expired_token",
+        "Los mensajes exactos de 409, 401 y 401 Token revocado que usa el Front coinciden con los de la API; los 422 traen loc y code traducibles por validation-messages.ts",
+        "Preflight CORS desde http://localhost:4200 permitido en las 6 rutas y un origen no configurado no recibe Access-Control-Allow-Origin",
+        "Un usuario registrado nunca es admin; el admin sembrado ve role admin en /me",
+        "cd api; python -m pytest completo en verde y api/data/app.db intacto"
+      ],
+      "contract_refs": ["§3.6"],
+      "depends_on": ["QA-005", "WEB-014"],
+      "size": "S",
       "status": "todo",
       "attempts": 0,
+      "commit": "",
       "blocked_reason": "",
-      "bugs": [],
-      "definition_of_done": [
-        "Flujo registro, login, forgot, reset y login con la nueva contraseña verificado",
-        "Token caducado (30 minutos) y reutilizado devuelven error",
-        "Un user no puede obtener rol admin ni acceder a lo exclusivo de admin",
-        "pytest completo y npm run build en verde",
-        "Informe en reports/auth-completo/qa-QA-002.md"
-      ]
+      "bugs": []
+    },
+    {
+      "id": "QA-006",
+      "story": "US-02",
+      "layer": "qa",
+      "title": "Verificación de build y SSR del Front (prerender, cabeceras y búsquedas de seguridad)",
+      "spec": "Sin ficheros de producción nuevos; entregable: reports/auth-completo/qa-QA-006.md (≤ 1 página, una línea por criterio). Con nvm use 26.0.0 en web/: npm run build y npm test -- --no-watch sin errores ni avisos de presupuesto; comprobar que se generan prerenderizados login, register y forgot-password. Arrancar npm run serve:ssr:web con PORT propio (nunca 4200 ni 8000) y comprobar con curl: /login, /register y /forgot-password → 200 con el HTML del formulario; '/', /inicio y /reset-password?token=x → cascarón CSR (sin <form, sin 'Hello', sin el valor del token en el HTML); /reset-password?token=x con las cabeceras Referrer-Policy: no-referrer y Cache-Control: no-store. Revisar la salida del servidor durante las pruebas: sin 'window is not defined', localStorage ni ReferenceError ni líneas con token=. Búsquedas en web/src/app y web/src/server.ts: localStorage, sessionStorage, window. y document. solo en token-storage.service.ts y *.spec.ts; sin console.* que reciba contraseñas o tokens; sin innerHTML ni bypassSecurityTrust*; ningún input de contraseña con maxlength; server.ts sin log de URL ni query. Parar los procesos al terminar. Si algo falla, reportar BUG y devolver la tarea WEB culpable.",
+      "files": [],
+      "acceptance": [
+        "npm run build y npm test -- --no-watch en verde con Node 26.0.0; login, register y forgot-password prerenderizados",
+        "serve:ssr:web: las 3 rutas públicas dan 200 con formulario; '/', /inicio y /reset-password?token=x dan el cascarón CSR sin el valor del token en el HTML",
+        "/reset-password?token=x devuelve Referrer-Policy: no-referrer y Cache-Control: no-store",
+        "Salida del servidor sin window is not defined, localStorage, ReferenceError ni líneas con token=",
+        "Búsquedas de seguridad limpias (almacenamiento solo en token-storage.service.ts, sin console con secretos, sin innerHTML ni bypassSecurityTrust*, sin maxlength en contraseñas) y procesos parados"
+      ],
+      "contract_refs": ["§5.2", "§5.7"],
+      "depends_on": ["WEB-014", "WEB-015"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
+    },
+    {
+      "id": "QA-007",
+      "story": "US-02",
+      "layer": "qa",
+      "title": "Verificación en navegador del flujo completo (solo si el puerto 8000 está libre)",
+      "spec": "Sin ficheros de producción; entregable reports/auth-completo/qa-QA-007.md. La URL de la API está fijada en el Front (environment.apiBaseUrl = http://127.0.0.1:8000/api) y los puertos 4200 y 8000 son del usuario (su servidor podría estar usando api/data/app.db): ANTES de empezar comprobar que 8000 está libre; si no lo está, NO usar ese servidor ni su BD: dejar los pasos como pendientes de verificación manual del usuario y terminar sin bloquear. Si está libre: arrancar la API desde api/ con DEBUG=true, DATABASE_URL a una BD temporal, INITIAL_ADMIN_* de prueba y CORS_ORIGINS con el origen del Front de prueba, y el Front con PORT propio (npm run build y npm run serve:ssr:web); usar un navegador si hay uno disponible; los pasos que no se puedan automatizar se listan como pendientes para el usuario (no bloquean). Pasos: /login sin sesión y /login?motivo=expirada sin NG0500 ni errores de consola; registrar → entra en /inicio con rol Usuario → cerrar sesión → login (Recordarme: refresh token en localStorage; sin él en sessionStorage; el access token en ningún Storage) → «¿Olvidaste tu contraseña?» → enlace del log de la API → nueva contraseña → login con la nueva y la antigua falla → el enlace reutilizado muestra «ya se ha utilizado» y uno caducado (simulado en la BD temporal) «ha caducado»; con la sesión abierta en otra pestaña, un reseteo hace que la siguiente petición protegida lleve a /login con el aviso de sesión cerrada; admin sembrado → /inicio muestra «Administrador»; sin errores de CORS; accesibilidad básica (label, aria-invalid, role alert/status) en las 5 pantallas. Parar todos los procesos y borrar solo la BD temporal.",
+      "files": [],
+      "acceptance": [
+        "Comprobado que el puerto 8000 está libre (si no, pasos marcados como pendientes para el usuario sin tocar su servidor ni su BD)",
+        "/login con y sin motivo sin NG0500 ni errores de consola; con sesión guardada /login acaba en /inicio",
+        "Flujo registro → /inicio (Usuario) → cerrar sesión → login → forgot → enlace del log → reset → login con la nueva; enlace reutilizado y caducado muestran su mensaje; sin errores de CORS",
+        "Tokens: el access token no está en Storage y el refresh token sí (localStorage con Recordarme, sessionStorage sin él); el reseteo con otra pestaña abierta lleva a /login con el aviso de sesión cerrada",
+        "Admin sembrado ve «Administrador»; accesibilidad básica en las 5 pantallas; procesos parados, solo la BD temporal borrada y api/data/app.db intacto"
+      ],
+      "contract_refs": ["§5.7"],
+      "depends_on": ["QA-006", "QA-002"],
+      "size": "S",
+      "status": "todo",
+      "attempts": 0,
+      "commit": "",
+      "blocked_reason": "",
+      "bugs": []
     }
   ],
   "risks": [
@@ -499,7 +919,7 @@
       "description": "Escalada de privilegios: si el registro público admite elegir el rol, cualquiera se hace admin.",
       "probability": "med",
       "impact": "high",
-      "mitigation": "El contrato prohíbe aceptar el rol en el payload de registro; QA-002 lo verifica."
+      "mitigation": "El contrato prohíbe aceptar el rol en el payload de registro; QA lo verifica."
     },
     {
       "id": "R-03",
@@ -513,14 +933,14 @@
       "description": "Los refresh tokens son stateless (ADR-003): tras resetear la contraseña los tokens emitidos siguen siendo válidos.",
       "probability": "high",
       "impact": "med",
-      "mitigation": "ARQ-003 resuelve ADR-003 o documenta la limitación aceptada."
+      "mitigation": "ADR-003 resuelto: revocación global por users.token_version (claim tv); limitación aceptada: un refresh normal no invalida el anterior."
     },
     {
       "id": "R-05",
       "description": "Sin rate limiting en login y forgot-password: fuerza bruta y abuso del envío.",
       "probability": "med",
       "impact": "med",
-      "mitigation": "ARQ-003 registra la decisión; si se difiere, queda en backlog."
+      "mitigation": "Decisión registrada (ADR-011): backlog, condición previa a un despliegue no local."
     },
     {
       "id": "R-06",
@@ -531,10 +951,10 @@
     },
     {
       "id": "R-07",
-      "description": "SSR de Angular: ADR-002 y ADR-006 sin resolver; almacenamiento de tokens sin navegador y prerender de rutas privadas o con token en la URL.",
+      "description": "SSR de Angular: almacenamiento de tokens sin navegador y prerender de rutas privadas o con token en la URL.",
       "probability": "med",
       "impact": "med",
-      "mitigation": "ARQ-004 los resuelve antes de WEB-001."
+      "mitigation": "Resuelto en diseño por ARQ-004 (ADR-002 y ADR-006); lo verifican los tests de las tareas WEB y QA-002."
     },
     {
       "id": "R-08",
@@ -555,7 +975,7 @@
       "description": "La migración de users (role, token_version) se aplica sola en el primer arranque real de la API sobre api/data/app.db; el servidor del usuario (python main.py con reload) la ejecutaría en cuanto OPS-003 modifique database.py.",
       "probability": "high",
       "impact": "med",
-      "mitigation": "Parada del PM antes de OPS-003: el usuario copia api/data/app.db y decide si para su servidor; los agentes solo usan BD temporales; el ALTER es aditivo e idempotente y conserva las filas."
+      "mitigation": "El usuario copia api/data/app.db y decide si para su servidor; los agentes solo usan BD temporales; el ALTER es aditivo e idempotente y conserva las filas."
     },
     {
       "id": "R-11",
@@ -576,7 +996,7 @@
       "description": "El token de reseteo va en la URL del enlace (Referer, historial y logs del servidor SSR).",
       "probability": "med",
       "impact": "med",
-      "mitigation": "ARQ-004 decide RenderMode y tratamiento de la ruta /reset-password (ADR-006)."
+      "mitigation": "ADR-006: ruta reset-password en RenderMode Client, Referrer-Policy, Cache-Control no-store y quitar el token de la URL."
     },
     {
       "id": "R-14",
@@ -597,21 +1017,35 @@
       "description": "La plantilla de bienvenida de app.html y app.spec.ts rompen todas las rutas hasta limpiarlos.",
       "probability": "high",
       "impact": "low",
-      "mitigation": "WEB-001 deja el cascarón solo con router-outlet y reescribe app.spec.ts (contrato §6.1)."
+      "mitigation": "La primera tarea WEB deja el cascarón solo con router-outlet y reescribe app.spec.ts."
     },
     {
       "id": "R-17",
       "description": "API-005 cambia el formato aprobado del 422 y toca 3 ficheros de tests de EP-01 (excepción a la propiedad de tests).",
       "probability": "med",
       "impact": "med",
-      "mitigation": "Ajuste mecánico y acotado en API-005; QA lo revisa en QA-003; el usuario queda avisado del cambio de formato."
+      "mitigation": "Ajuste mecánico y acotado; QA lo revisa en QA-003; el usuario queda avisado del cambio de formato."
     },
     {
       "id": "R-18",
       "description": "La app es sin zone.js: el estado asíncrono en campos planos no repinta.",
       "probability": "med",
       "impact": "med",
-      "mitigation": "Todo estado asíncrono en signal (contrato §6.1); lo verifican los *.spec.ts y QA-002."
+      "mitigation": "Todo estado asíncrono en signal; lo verifican los *.spec.ts y QA-002."
+    },
+    {
+      "id": "R-19",
+      "description": "Árbol de trabajo sucio al arrancar el circuito: OPS-003 (hecha) y API-002 (parcial) sin commitear en api/, más cambios ajenos en .github/agents/, AGENTS.md y flujo-agents.md. La precondición de git (api/ y web/ limpios) no se cumple.",
+      "probability": "high",
+      "impact": "med",
+      "mitigation": "El usuario commitea antes de arrancar (propuesta en la entrega de la migración); el PM no commitea ni descarta nada."
+    },
+    {
+      "id": "R-20",
+      "description": "La URL de la API está fijada en el Front (127.0.0.1:8000) y los puertos 4200 y 8000 son del usuario, cuyo servidor podría usar api/data/app.db: QA-007 no puede probar el Front contra una API propia si el 8000 está ocupado.",
+      "probability": "med",
+      "impact": "med",
+      "mitigation": "QA-007 comprueba antes que el 8000 está libre; si no, deja los pasos como pendientes para el usuario sin tocar su servidor ni su BD. El resto de la verificación API-Web va por TestClient (QA-002) y SSR en puerto propio (QA-006)."
     }
   ]
 }
