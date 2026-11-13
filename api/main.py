@@ -13,14 +13,22 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.core.database import init_db  # noqa: E402
+from app.core.database import SessionLocal, init_db  # noqa: E402
 from app.modules.auth.routes import router as auth_router  # noqa: E402
+from app.modules.auth.services import ensure_initial_admin  # noqa: E402
 from app.shared.exceptions import register_exception_handlers  # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    with SessionLocal() as db:
+        ensure_initial_admin(
+            db,
+            email=settings.initial_admin_email,
+            username=settings.initial_admin_username,
+            password=settings.initial_admin_password.get_secret_value(),
+        )
     yield
 
 

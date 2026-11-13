@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -77,6 +77,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     app_name: str = "GrangesAndreu API"
@@ -92,6 +93,11 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+
+    # Primer administrador (contrato auth-completo §4.5): se valida al arrancar, no aquí.
+    initial_admin_email: str = ""
+    initial_admin_username: str = ""
+    initial_admin_password: SecretStr = SecretStr("")
 
     # NoDecode: pydantic-settings no decodifica el JSON antes de parse_cors_origins.
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:4200"]

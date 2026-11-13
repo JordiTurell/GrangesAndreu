@@ -8,6 +8,8 @@ from pydantic_core import PydanticCustomError
 
 from app.core.security import MAX_PASSWORD_BYTES, exceeds_password_limit
 
+from .entities import UserRole
+
 
 def _check_password_bytes(password: str) -> str:
     if exceeds_password_limit(password):
@@ -19,13 +21,21 @@ def _check_password_bytes(password: str) -> str:
     return password
 
 
+NewPassword = Annotated[
+    str,
+    # Field antes que AfterValidator: así el 422 conserva el tipo `string_too_short` (no `too_short`).
+    Field(
+        min_length=8,
+        description="Mínimo 8 caracteres y máximo 72 bytes en UTF-8 (límite de bcrypt).",
+    ),
+    AfterValidator(_check_password_bytes),
+]
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80)
     email: EmailStr
-    password: Annotated[str, AfterValidator(_check_password_bytes)] = Field(
-        min_length=8,
-        description="Mínimo 8 caracteres y máximo 72 bytes en UTF-8 (límite de bcrypt).",
-    )
+    password: NewPassword
 
 
 class UserRead(BaseModel):
@@ -35,6 +45,7 @@ class UserRead(BaseModel):
     username: str
     email: EmailStr
     is_active: bool
+    role: UserRole
     created_at: datetime
 
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import bcrypt
 import jwt
@@ -12,10 +13,13 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.shared.exceptions import AuthenticationError
+from app.shared.exceptions import AuthenticationError, PermissionDeniedError
 
 from .config import settings
 from .database import get_db
+
+if TYPE_CHECKING:
+    from app.modules.auth.entities import UserRole
 
 TokenType = Literal["access", "refresh"]
 
@@ -100,3 +104,16 @@ def get_current_user(
     if user is None or not user.is_active:
         raise AuthenticationError("Usuario no válido o inactivo")
     return user
+
+
+def require_role(*roles: UserRole) -> Callable[..., Any]:
+    """Fábrica de dependencias (ADR-007): 401 sin sesión válida y 403 si el rol no está en ``roles``."""
+    if not roles:
+        raise ValueError("require_role necesita al menos un rol")
+
+    def _dependency(user=Depends(get_current_user)):
+        if user.role not in roles:
+            raise PermissionDeniedError("No tienes permisos para realizar esta acción")
+        return user
+
+    return _dependency

@@ -27,6 +27,10 @@ TEST_SECRET_KEY = "clave-solo-para-tests-0123456789abcdef"
 os.environ["DEBUG"] = "true"
 os.environ["SECRET_KEY"] = TEST_SECRET_KEY
 os.environ["DATABASE_URL"] = SESSION_DATABASE_URL
+# §4.1: ni el shell ni api/.env deben colar un primer administrador en la suite.
+os.environ["INITIAL_ADMIN_EMAIL"] = ""
+os.environ["INITIAL_ADMIN_USERNAME"] = ""
+os.environ["INITIAL_ADMIN_PASSWORD"] = ""
 
 
 @pytest.fixture(scope="session", autouse=True)

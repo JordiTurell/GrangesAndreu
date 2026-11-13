@@ -41,7 +41,15 @@ def url_sqlite(ruta: Path) -> str:
 @pytest.fixture(autouse=True)
 def entorno_limpio(monkeypatch: pytest.MonkeyPatch) -> None:
     """Parte de DEBUG=true y SECRET_KEY válida; el resto de variables de Settings, ausentes."""
-    for nombre in ("DATABASE_URL", "CORS_ORIGINS", "DEBUG", "SECRET_KEY"):
+    for nombre in (
+        "DATABASE_URL",
+        "CORS_ORIGINS",
+        "DEBUG",
+        "SECRET_KEY",
+        "INITIAL_ADMIN_EMAIL",
+        "INITIAL_ADMIN_USERNAME",
+        "INITIAL_ADMIN_PASSWORD",
+    ):
         monkeypatch.delenv(nombre, raising=False)
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("SECRET_KEY", SECRET_KEY_VALIDA)
@@ -249,3 +257,44 @@ def test_fx_03_debug_sin_secret_key_genera_clave_efimera(monkeypatch: pytest.Mon
         settings = Settings(_env_file=None)
 
     assert settings.secret_key
+
+
+# --- Primer administrador (contrato auth-completo §4.1) -------------------------------------
+
+
+def test_ia_01_ausentes_usan_los_defectos_vacios() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.initial_admin_email == ""
+    assert settings.initial_admin_username == ""
+    assert settings.initial_admin_password.get_secret_value() == ""
+
+
+def test_ia_02_se_leen_del_entorno_y_la_contrasena_es_secreta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INITIAL_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("INITIAL_ADMIN_USERNAME", "administrador")
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "Clave-Secreta-123")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.initial_admin_email == "admin@example.com"
+    assert settings.initial_admin_username == "administrador"
+    assert settings.initial_admin_password.get_secret_value() == "Clave-Secreta-123"
+    assert "Clave-Secreta-123" not in repr(settings)
+
+
+def test_ia_03_un_error_de_configuracion_no_incluye_la_contrasena(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEBUG", "false")
+    monkeypatch.delenv("SECRET_KEY")
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "Clave-Secreta-123")
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+
+    assert "SECRET_KEY es obligatoria" in str(excinfo.value)
+    assert "Clave-Secreta-123" not in str(excinfo.value)
+    assert Settings.model_config["hide_input_in_errors"] is True
