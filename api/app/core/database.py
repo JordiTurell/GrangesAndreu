@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
+from .migrations import run_migrations
 
 _is_sqlite = settings.database_url.startswith("sqlite")
 
@@ -46,7 +47,8 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Crea el fichero SQLite y todas las tablas registradas si no existen."""
+    """Crea el fichero SQLite y las tablas registradas que falten y aplica las migraciones (ADR-005)."""
     from app.modules.auth import entities as auth_entities  # noqa: F401  (registra modelos)
 
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
